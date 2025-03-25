@@ -11,7 +11,16 @@ mongoose.set('strictQuery', false);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', 'http://127.0.0.1:5500'); // Replace with your frontend's origin
+  const allowedOrigins = [
+    'http://127.0.0.1:5500', 
+    'https://petbed.github.io'
+  ];
+  const origin = req.headers.origin;
+  
+  if (allowedOrigins.some(allowedOrigin => origin?.startsWith(allowedOrigin))) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   next();
