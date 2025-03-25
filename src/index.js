@@ -3,6 +3,8 @@ const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 
 const Customer = require('./models/customer');
+const User = require('./models/user');
+const user = require('./models/user');
 
 const app = express();
 mongoose.set('strictQuery', false);
@@ -14,34 +16,16 @@ if (process.env.NODE_ENV !== 'production') {
   dotenv.config();
 }
 
-const customers = [
-  {
-    "name": "Acme Corporation",
-    "industry": "Manufacturing",
-  },
-  {
-    "name": "Globex Corporation",
-    "industry": "Manufacturing",
-  },
-  {
-    "name": "Soylent Corporation",
-    "industry": "Food",
-  },
-]
-
 const PORT = process.env.PORT || 3000;
 const CONNECTION = process.env.CONNECTION;
-
-const customer = new Customer({
-  "name": "Acme Corporation",
-  "industry": "Manufacturing",
-});
-// customer.save();
 
 app.get("/", (req, res) => {
   res.send("Hello World");
 });
 
+//=======================================================
+// Customer API
+//=======================================================
 app.get("/api/customers", async (req, res) => {
   // console.log(await mongoose.connection.db.listCollections().toArray());
   try {
@@ -86,12 +70,6 @@ app.delete("/api/customers", async (req, res) => {
   }
 })
 
-// app.get("/api/customers/:id", async (req, res) => {
-//   res.json({
-//     requestParams: req.params,
-//   })
-// });
-
 app.post("/api/customers", async (req, res) => {
   console.log(req.body);
   const customer = new Customer(req.body);
@@ -100,6 +78,72 @@ app.post("/api/customers", async (req, res) => {
     res.status(201).json({customer});
   } catch (e) {
     res.status(400).json({error: e.message});
+  }
+});
+
+//=======================================================
+// User API
+//=======================================================
+app.get("/api/users", async (req, res) => {
+  const userId = req.query.id;
+  const result = await User.find();
+  
+  try {
+    if (!userId) {
+      res.json({"user": result});
+    } else {
+      const user = await User.findById(userId);
+      if (!user) {
+        res.status(404).json({"error": "User not found"});
+      } else {
+        res.json({user});
+      }
+    }
+  } catch (e) {
+    res.status(500).json({"error": e.message});
+  }
+});
+
+app.post("/api/users", async (req, res) => {
+  const { username, password, email } = req.body;
+
+  if (!username || !password || !email) {
+    return res.status(400).json({ error: "Username, password, and email are required" });
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({ error: "Invalid email format" });
+  }
+
+  const user = new User({ username, password, email });
+  try {
+    await user.save();
+    res.json({
+      message: "User created successfully",
+    });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.delete("/api/users", async (req, res) => {
+  try {
+    const userId = req.query.id;
+    const result = await User.deleteOne({_id: userId});
+    res.json({deletedCount: result.deletedCount});
+  } catch (e) {
+    res.status(500).json({error: e.message});
+  }
+});
+
+app.put("/api/users", async (req, res) => {
+  try {
+    const userId = req.query.id;
+    const result = await User.replaceOne({_id: userId}, req.body);
+    res.json({updatedCount: result.modifiedCount});
+  } catch (e) {
+    res.status(500).json({error: e.message});
   }
 });
 
