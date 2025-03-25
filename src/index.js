@@ -4,13 +4,18 @@ const dotenv = require('dotenv');
 
 const Customer = require('./models/customer');
 const User = require('./models/user');
-const user = require('./models/user');
 
 const app = express();
 mongoose.set('strictQuery', false);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', 'http://127.0.0.1:5500'); // Replace with your frontend's origin
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  next();
+});
 
 if (process.env.NODE_ENV !== 'production') {
   dotenv.config();
@@ -106,6 +111,7 @@ app.get("/api/users", async (req, res) => {
 
 app.post("/api/users", async (req, res) => {
   const { username, password, email } = req.body;
+  console.log(req.body);
 
   if (!username || !password || !email) {
     return res.status(400).json({ error: "Username, password, and email are required" });
@@ -115,12 +121,11 @@ app.post("/api/users", async (req, res) => {
   if (!emailRegex.test(email)) {
     return res.status(400).json({ error: "Invalid email format" });
   }
-
   const user = new User({ username, password, email });
   try {
     await user.save();
     res.json({
-      message: "User created successfully",
+      userId: user._id,
     });
   } catch (e) {
     res.status(400).json({ error: e.message });
@@ -145,6 +150,28 @@ app.put("/api/users", async (req, res) => {
   } catch (e) {
     res.status(500).json({error: e.message});
   }
+});
+
+app.get("/api/users/login", async (req, res) => {
+  const { email, username, password } = req.query;
+  console.log(email, username, password);
+
+  if ((!email && !username) || !password) {
+    console.log("Email/Username and password are required");
+    return res.status(400).json({ error: "Email/Username and password are required" });
+  }
+
+  const query = email ? { email, password } : { username, password };
+  const user = await User
+    .findOne(query)
+    .select('_id');
+
+  if (!user) {
+    console.log("User not found");
+    return res.status(404).json({ error: "User not found" });
+  }
+
+  res.json({ userId: user._id });
 });
 
 const start = async() => {
