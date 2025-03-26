@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 
 const Customer = require('./models/customer');
 const User = require('./models/user');
+const Note = require('./models/note');
 
 const app = express();
 mongoose.set('strictQuery', false);
@@ -181,6 +182,78 @@ app.get("/api/users/login", async (req, res) => {
   }
 
   res.json({ userId: user._id });
+});
+
+//=======================================================
+// Notes API
+//=======================================================
+app.get("/api/notes", async (req, res) => {
+  const noteId = req.query.noteId;
+  const userId = req.query.userId;
+
+  try {
+    const notes = await Note.find();
+
+    if (noteId && userId) {
+      res.json({"error": "Only one query parameter is allowed"});
+    } else if (noteId) {
+      const note = await Note.findById(noteId);
+      if (!note) {
+        res.status(404).json({ error: "Note not found" });
+      } else {
+        res.json({ note });
+      }
+    } else if (userId) {
+      const userNotes = await Note.find({ user: userId });
+      res.json({ notes: userNotes });
+      if (!userNotes) {
+        res.status(404).json({ error: "Notes not found" });
+      }
+    } else {
+      res.json({ notes });
+    }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/notes", async (req, res) => {
+  const { title, content, userId } = req.body;
+  if (!title || !userId) {
+    return res.status(400).json({ error: "Title, and userId are required" });
+  }
+
+  const note = new Note({
+    title,
+    content,
+    user: userId,
+  });
+  try {
+    await note.save();
+    res.status(201).json({ note });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.delete("/api/notes", async (req, res) => {
+  try {
+    const noteId = req.query.id;
+    const result = await Note.deleteOne({_id: noteId});
+    res.json({deletedCount: result.deletedCount});
+  } catch (e) {
+    res.status(500).json({error: e.message});
+  }
+});
+
+app.put("/api/notes", async (req, res) => {
+  try {
+    const noteId = req.query.id;
+    const result = await Note.replaceOne({_id: noteId}, req.body);
+    res.json({updatedCount: result.modifiedCount});
+  } catch (e) {
+    res.status(500).json({error: e.message});
+  }
 });
 
 const start = async() => {
