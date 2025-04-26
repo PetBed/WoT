@@ -5,6 +5,7 @@ const dotenv = require('dotenv');
 const Customer = require('./models/customer');
 const User = require('./models/user');
 const Note = require('./models/note');
+const PostBoard = require('./models/Post Board/post');
 
 const app = express();
 mongoose.set('strictQuery', false);
@@ -14,7 +15,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use((req, res, next) => {
   const allowedOrigins = [
     'http://127.0.0.1:5500', 
-    'https://petbed.github.io'
+    'https://petbed.github.io',
   ];
   const origin = req.headers.origin;
   
@@ -33,6 +34,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 const PORT = process.env.PORT || 3000;
 const CONNECTION = process.env.CONNECTION;
+const POST_BOARD_CONNECTION = process.env.POST_BOARD_CONNECTION;
 
 app.get("/", (req, res) => {
   res.send("Hello World");
@@ -256,6 +258,71 @@ app.put("/api/notes", async (req, res) => {
   }
 });
 
+//=======================================================
+// Post Board API
+//=======================================================
+app.get("/api/postboard", async (req, res) => {
+  const postId = req.query.postId;
+
+  try {
+    const posts = await PostBoard.find();
+
+    if (postId) {
+      const post = await PostBoard.findById(postId);
+      if (!post) {
+        res.status(404).json({ error: "Post not found" });
+      } else {
+        res.json({ post });
+      }
+    } else {
+      res.json({ posts });
+    }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/postboard", async (req, res) => {
+  const { content, date } = req.body;
+  if (!content || !date) {
+    return res.status(400).json({ error: "Content and date is required" });
+  }
+
+  const post = new PostBoard({
+    content,
+    date: new Date(date),
+  });
+  try {
+    await post.save();
+    res.status(201).json({ post });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.delete("/api/postboard", async (req, res) => {
+  try {
+    const postId = req.query.id;
+    const result = await PostBoard.deleteOne({_id: postId});
+    res.json({deletedCount: result.deletedCount});
+  } catch (e) {
+    res.status(500).json({error: e.message});
+  }
+});
+
+app.put("/api/postboard", async (req, res) => {
+  try {
+    const noteId = req.query.id;
+    const result = await Note.replaceOne({_id: noteId}, req.body);
+    res.json({updatedCount: result.modifiedCount});
+  } catch (e) {
+    res.status(500).json({error: e.message});
+  }
+});
+
+//=======================================================
+// 
+//=======================================================
 const start = async() => {
   try{
     await mongoose.connect(CONNECTION);
