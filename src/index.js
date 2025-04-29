@@ -1,6 +1,8 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
+const axios = require('axios');
+const cheerio = require('cheerio');
 
 const Customer = require('./models/customer');
 const User = require('./models/user');
@@ -303,7 +305,7 @@ app.post("/api/postboard", async (req, res) => {
 app.delete("/api/postboard", async (req, res) => {
   try {
     const postId = req.query.id;
-    const result = await PostBoard.deleteOne({_id: postId});
+    const result = await PostBoard.deleteMany({});
     res.json({deletedCount: result.deletedCount});
   } catch (e) {
     res.status(500).json({error: e.message});
@@ -321,8 +323,58 @@ app.put("/api/postboard", async (req, res) => {
 });
 
 //=======================================================
-// 
+// SDG News Scrapper
 //=======================================================
+app.get("/api/sdgnews", async (req, res) => {
+  var allNews = await fetchSDGNewsFirstPages(5);
+  res.json({ allNews });
+});
+
+
+async function fetchSDGNewsPage(page) {
+  try {
+    const url = `https://sdgs.un.org/news?page=%2C%2C${page}`;
+    const response = await axios.get(url);
+    const html = response.data;
+    const $ = cheerio.load(html);
+
+    const newsItems = [];
+
+    $('.tabs-button .card').each((index, element) => {
+      const title = $(element).find('.card-title').text().trim();
+      const link = 'https://sdgs.un.org' + $(element).find('.card-body > a').attr('href');
+      const date = $(element).find('.card-date').text().trim();
+      const summary = $(element).find('.card-text').text().trim();
+      const goals = $(element).find('.badge a').map((i, el) => $(el).text().trim()).get();
+      const image = 'https://sdgs.un.org' + $(element).find('.card-img-top').attr('src');
+
+      newsItems.push({ title, link, date, summary, goals, image });
+    });
+
+    return newsItems;
+  } catch (error) {
+    console.error('Error fetching SDG news:', error);
+  }
+}
+
+async function fetchSDGNewsFirstPages(n) {
+  // let allNews = [];
+  // for (let i = 0; i < n; i++) {
+  //   const pageNews = await fetchSDGNewsPage(i);
+  //   console.log(`Fetched ${pageNews.length} items from page ${i}`);
+  //   allNews = allNews.concat(pageNews);
+  // }
+  // return allNews;
+  
+  try {
+    const pages = Array.from({ length: n }, (_, i) => i);
+    const results = await Promise.all(pages.map(fetchSDGNewsPage));
+    return results.flat();
+  } catch (error) {
+    console.error("Error fetching SDG news pages:", error);
+  }
+}
+
 const start = async() => {
   try{
     await mongoose.connect(CONNECTION);
