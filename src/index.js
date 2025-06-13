@@ -18,7 +18,8 @@ app.use((req, res, next) => {
   const allowedOrigins = [
     'http://127.0.0.1:5500', 
     'https://petbed.github.io',
-    'http://127.0.0.1:5501', 
+    'http://127.0.0.1:5501',
+    'http://127.0.0.1:5500/index.html'
   ];
   const origin = req.headers.origin;
   
@@ -327,7 +328,7 @@ app.put("/api/postboard", async (req, res) => {
 // SDG News Scrapper
 //=======================================================
 app.get("/api/sdgnews", async (req, res) => {
-  var allNews = await fetchSDGNewsFirstPages(5);
+  var allNews = await fetchSDGNewsFirstPages(15);
   res.json({ allNews });
 });
 
