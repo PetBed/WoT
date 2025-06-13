@@ -19,7 +19,8 @@ app.use((req, res, next) => {
     'http://127.0.0.1:5500', 
     'https://petbed.github.io',
     'http://127.0.0.1:5501',
-    'http://127.0.0.1:5500/index.html'
+    'http://127.0.0.1:5500/index.html',
+    'https://fcgh4w.csb.app/'
   ];
   const origin = req.headers.origin;
   
@@ -328,7 +329,7 @@ app.put("/api/postboard", async (req, res) => {
 // SDG News Scrapper
 //=======================================================
 app.get("/api/sdgnews", async (req, res) => {
-  var allNews = await fetchSDGNewsFirstPages(15);
+  var allNews = await fetchSDGNewsFirstPages(2);
   res.json({ allNews });
 });
 
