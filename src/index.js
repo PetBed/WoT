@@ -17,10 +17,11 @@ app.use(express.urlencoded({ extended: true }));
 app.use((req, res, next) => {
   const allowedOrigins = [
     'http://127.0.0.1:5500', 
-    'https://petbed.github.io',
+    'https://petbed.github.io/*',
     'http://127.0.0.1:5501',
     'http://127.0.0.1:5500/index.html',
-    'https://fcgh4w.csb.app'
+    'https://fcgh4w.csb.app',
+
   ];
   const origin = req.headers.origin;
   
