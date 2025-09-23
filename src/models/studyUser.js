@@ -15,6 +15,14 @@ const studyUserSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    securityQuestion: {
+        type: String,
+        required: true
+    },
+    securityAnswer: {
+        type: String,
+        required: true
+    },
     studyLogs: {
         type: Map,
         of: Number, // Storing total seconds for each subject
@@ -27,6 +35,12 @@ const studyUserSchema = new mongoose.Schema({
     lastStudyDay: {
         type: String, // Storing date as 'YYYY-MM-DD'
         default: ''
+    },
+    settings: {
+        darkMode: {
+            type: Boolean,
+            default: false
+        }
     }
 });
 
