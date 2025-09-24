@@ -13,7 +13,7 @@ const PostBoard = require('./models/Post Board/post');
 
 // Study App Models
 const StudyUser = require('./models/studyUser');
-const Task = require('./models/task'); 
+const Task = require('./models/task'); // Task model for the study app
 
 const app = express();
 mongoose.set('strictQuery', false);
@@ -26,463 +26,305 @@ app.use((req, res, next) => {
   if (allowedOrigins.some(allowedOrigin => origin?.startsWith(allowedOrigin))) { res.setHeader('Access-Control-Allow-Origin', origin); }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') { return res.sendStatus(200); }
   next();
 });
 
-if (process.env.NODE_ENV !== 'production') {
-  dotenv.config();
+
+dotenv.config();
+
+const connect = async () => {
+    try {
+        await mongoose.connect(process.env.MONGO);
+        console.log('Database connected');
+    } catch (error) {
+        console.error('Database connection error:', error);
+        process.exit(1);
+    }
 }
 
-const PORT = process.env.PORT || 3000;
-const CONNECTION = process.env.CONNECTION;
-
-app.get("/", (req, res) => { res.send("Hello World"); });
-
-//=======================================================
-// Customer API
-//=======================================================
-app.get("/api/customers", async (req, res) => {
-  try {
-    const result = await Customer.find();
-    const customerId = req.query.id;
-    if (!customerId) {
-      res.json({"customers": result});
-    } else {
-      const customer = await Customer.findById(customerId);
-      if (!customer) {
-        res.status(404).json({"error": "Customer not found"});
-      } else {
-        res.json({customer});
-      }
-    }
-  } catch (e) { 
-    res.status(500).json({"error": e.message});
-  }
-});
-app.put("/api/customers", async (req, res) => {
-  try {
-    const customerId = req.query.id;
-    const result = await Customer.replaceOne({_id: customerId}, req.body);
-    res.json({updatedCount: result.modifiedCount});
-  } catch (e) {
-    res.status(500).json({error: e.message});
-  }
-});
-app.delete("/api/customers", async (req, res) => {
-  try {
-    const customerId = req.query.id;
-    const result = await Customer.deleteOne({_id: customerId});
-    res.json({deletedCount: result.deletedCount});
-  } catch (e) {
-    res.status(500).json({error: e.message});
-  }
-});
-app.post("/api/customers", async (req, res) => {
-  const customer = new Customer(req.body);
-  try {
-    await customer.save();
-    res.status(201).json({customer});
-  } catch (e) {
-    res.status(400).json({error: e.message});
-  }
+app.get('/', (req, res) => {
+    res.send('Hello World!');
 });
 
-//=======================================================
-// User API
-//=======================================================
-app.get("/api/users", async (req, res) => {
-  const userId = req.query.id;
-  const result = await User.find();
-  
-  try {
-    if (!userId) {
-      res.json({"user": result});
-    } else {
-      const user = await User.findById(userId);
-      if (!user) {
-        res.status(404).json({"error": "User not found"});
-      } else {
-        res.json({user});
-      }
-    }
-  } catch (e) {
-    res.status(500).json({"error": e.message});
-  }
-});
-app.post("/api/users", async (req, res) => {
-  const { username, password, email } = req.body;
+// ===============================================================================================
+// OTHER PROJECT API ROUTES
+// ===============================================================================================
 
-  if (!username || !password || !email) {
-    return res.status(400).json({ error: "Username, password, and email are required" });
-  }
-
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
-    return res.status(400).json({ error: "Invalid email format" });
-  }
-  const user = new User({ username, password, email });
-  try {
-    await user.save();
-    res.json({
-      userId: user._id,
-    });
-  } catch (e) {
-    res.status(400).json({ error: e.message });
-  }
-});
-app.delete("/api/users", async (req, res) => {
-  try {
-    const userId = req.query.id;
-    const result = await User.deleteOne({_id: userId});
-    res.json({deletedCount: result.deletedCount});
-  } catch (e) {
-    res.status(500).json({error: e.message});
-  }
-});
-app.put("/api/users", async (req, res) => {
-  try {
-    const userId = req.query.id;
-    const result = await User.replaceOne({_id: userId}, req.body);
-    res.json({updatedCount: result.modifiedCount});
-  } catch (e) {
-    res.status(500).json({error: e.message});
-  }
-});
-app.get("/api/users/login", async (req, res) => {
-  const { email, username, password } = req.query;
-
-  if ((!email && !username) || !password) {
-    return res.status(400).json({ error: "Email/Username and password are required" });
-  }
-
-  const query = email ? { email, password } : { username, password };
-  const user = await User
-    .findOne(query)
-    .select('_id');
-
-  if (!user) {
-    return res.status(404).json({ error: "User not found" });
-  }
-
-  res.json({ userId: user._id });
-});
-
-//=======================================================
-// Notes API
-//=======================================================
-app.get("/api/notes", async (req, res) => {
-  const noteId = req.query.noteId;
-  const userId = req.query.userId;
-
-  try {
-    const notes = await Note.find();
-
-    if (noteId && userId) {
-      res.json({"error": "Only one query parameter is allowed"});
-    } else if (noteId) {
-      const note = await Note.findById(noteId);
-      if (!note) {
-        res.status(404).json({ error: "Note not found" });
-      } else {
-        res.json({ note });
-      }
-    } else if (userId) {
-      const userNotes = await Note.find({ user: userId });
-      res.json({ notes: userNotes });
-      if (!userNotes) {
-        res.status(404).json({ error: "Notes not found" });
-      }
-    } else {
-      res.json({ notes });
-    }
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-app.post("/api/notes", async (req, res) => {
-  const { title, content, userId } = req.body;
-  if (!title || !userId) {
-    return res.status(400).json({ error: "Title, and userId are required" });
-  }
-
-  const note = new Note({
-    title,
-    content,
-    user: userId,
-  });
-  try {
-    await note.save();
-    res.status(201).json({ note });
-  } catch (e) {
-    res.status(400).json({ error: e.message });
-  }
-});
-app.delete("/api/notes", async (req, res) => {
-  try {
-    const noteId = req.query.id;
-    const result = await Note.deleteOne({_id: noteId});
-    res.json({deletedCount: result.deletedCount});
-  } catch (e) {
-    res.status(500).json({error: e.message});
-  }
-});
-app.put("/api/notes", async (req, res) => {
-  try {
-    const noteId = req.query.id;
-    const result = await Note.replaceOne({_id: noteId}, req.body);
-    res.json({updatedCount: result.modifiedCount});
-  } catch (e) {
-    res.status(500).json({error: e.message});
-  }
-});
-
-//=======================================================
-// Post Board API
-//=======================================================
-app.get("/api/postboard", async (req, res) => {
-  const postId = req.query.postId;
-
-  try {
-    const posts = await PostBoard.find();
-
-    if (postId) {
-      const post = await PostBoard.findById(postId);
-      if (!post) {
-        res.status(404).json({ error: "Post not found" });
-      } else {
-        res.json({ post });
-      }
-    } else {
-      res.json({ posts });
-    }
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-app.post("/api/postboard", async (req, res) => {
-  const { content, date } = req.body;
-  if (!content || !date) {
-    return res.status(400).json({ error: "Content and date is required" });
-  }
-
-  const post = new PostBoard({
-    content,
-    date: new Date(date),
-  });
-  try {
-    await post.save();
-    res.status(201).json({ post });
-  } catch (e) {
-    res.status(400).json({ error: e.message });
-  }
-});
-app.delete("/api/postboard", async (req, res) => {
-  try {
-    const postId = req.query.id;
-    const result = await PostBoard.deleteMany({});
-    res.json({deletedCount: result.deletedCount});
-  } catch (e) {
-    res.status(500).json({error: e.message});
-  }
-});
-app.put("/api/postboard", async (req, res) => {
-  try {
-    const noteId = req.query.id;
-    const result = await Note.replaceOne({_id: noteId}, req.body);
-    res.json({updatedCount: result.modifiedCount});
-  } catch (e) {
-    res.status(500).json({error: e.message});
-  }
-});
-
-//=======================================================
-// SDG News Scrapper
-//=======================================================
-app.get("/api/sdgnews", async (req, res) => {
-  var allNews = await fetchSDGNewsFirstPages(2);
-  res.json({ allNews });
-});
-async function fetchSDGNewsPage(page) {
-  try {
-    const url = `https://sdgs.un.org/news?page=%2C%2C${page}`;
-    const response = await axios.get(url);
-    const html = response.data;
-    const $ = cheerio.load(html);
-
-    const newsItems = [];
-
-    $('.tabs-button .card').each((index, element) => {
-      const title = $(element).find('.card-title').text().trim();
-      const link = 'https://sdgs.un.org' + $(element).find('.card-body > a').attr('href');
-      const date = $(element).find('.card-date').text().trim();
-      const summary = $(element).find('.card-text').text().trim();
-      const goals = $(element).find('.badge a').map((i, el) => $(el).text().trim()).get();
-      const image = 'https://sdgs.un.org' + $(element).find('.card-img-top').attr('src');
-
-      newsItems.push({ title, link, date, summary, goals, image });
-    });
-
-    return newsItems;
-  } catch (error) {
-    console.error('Error fetching SDG news:', error);
-  }
-}
-async function fetchSDGNewsFirstPages(n) {
-  try {
-    const pages = Array.from({ length: n }, (_, i) => i);
-    const results = await Promise.all(pages.map(fetchSDGNewsPage));
-    return results.flat();
-  } catch (error) {
-    console.error("Error fetching SDG news pages:", error);
-  }
-}
-
-//=======================================================
-// Study Dashboard User API
-//=======================================================
-app.post("/api/study/register", async (req, res) => {
-    const { username, email, password, securityQuestion, securityAnswer } = req.body;
-    if (!username || !email || !password || !securityQuestion || !securityAnswer) {
-        return res.status(400).json({ error: "Please enter all fields." });
-    }
+// == CUSTOMERS ==
+app.get('/api/customers', async (req, res) => {
     try {
-        let user = await StudyUser.findOne({ email });
-        if (user) return res.status(400).json({ error: "User with this email already exists." });
-        
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
-        const hashedSecurityAnswer = await bcrypt.hash(securityAnswer, salt);
-
-        const newUser = new StudyUser({
-            username,
-            email,
-            password: hashedPassword,
-            securityQuestion,
-            securityAnswer: hashedSecurityAnswer,
-            settings: { darkMode: false }
-        });
-
-        await newUser.save();
-        res.status(201).json({
-            message: "User registered successfully!",
-            user: { id: newUser.id, username: newUser.username, email: newUser.email, settings: newUser.settings },
-        });
+        const customers = await Customer.find({});
+        res.json(customers);
     } catch (e) {
-        res.status(500).json({ error: "Server error: " + e.message });
+        res.status(500).json({ error: e.message });
     }
 });
-app.post("/api/study/login", async (req, res) => {
-    const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: "Please enter all fields." });
+
+// == USERS ==
+app.get('/api/users', async (req, res) => {
     try {
-        const user = await StudyUser.findOne({ email });
-        if (!user) return res.status(400).json({ error: "Invalid credentials." });
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(400).json({ error: "Invalid credentials." });
-        res.status(200).json({
-            message: "Login successful!",
-            user: { id: user.id, username: user.username, email: user.email, settings: user.settings },
-        });
+        const users = await User.find({});
+        res.json(users);
     } catch (e) {
-        res.status(500).json({ error: "Server error: " + e.message });
+        res.status(500).json({ error: e.message });
     }
 });
-
-// --- Password Reset Endpoints ---
-app.post('/api/study/forgot-password/step1', async (req, res) => {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email is required.' });
+app.get('/api/users/:userId', async (req, res) => {
     try {
-        const user = await StudyUser.findOne({ email });
-        if (!user) return res.status(404).json({ error: 'User with this email not found.' });
-        res.json({ userId: user.id, securityQuestion: user.securityQuestion });
-    } catch (e) {
-        res.status(500).json({ error: "Server error: " + e.message });
-    }
-});
-
-app.post('/api/study/forgot-password/step2', async (req, res) => {
-    const { userId, securityAnswer, newPassword } = req.body;
-    if (!userId || !securityAnswer || !newPassword) return res.status(400).json({ error: 'All fields are required.' });
-    if (newPassword.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters long.' });
-
-    try {
-        const user = await StudyUser.findById(userId);
-        if (!user) return res.status(404).json({ error: 'User not found.' });
-
-        const isAnswerMatch = await bcrypt.compare(securityAnswer, user.securityAnswer);
-        if (!isAnswerMatch) return res.status(400).json({ error: 'Incorrect answer to security question.' });
-        
-        const salt = await bcrypt.genSalt(10);
-        user.password = await bcrypt.hash(newPassword, salt);
-        await user.save();
-        
-        res.status(200).json({ message: 'Password has been reset successfully!' });
-    } catch (e) {
-        res.status(500).json({ error: "Server error: " + e.message });
-    }
-});
-//=======================================================
-// Study Dashboard User Settings API
-//=======================================================
-app.put('/api/study/user/username', async (req, res) => {
-    const { userId, newUsername } = req.body;
-    if (!userId || !newUsername) return res.status(400).json({ error: 'User ID and new username are required.' });
-    if (newUsername.length < 3) return res.status(400).json({ error: 'Username must be at least 3 characters long.' });
-    try {
-        const existingUser = await StudyUser.findOne({ username: newUsername });
-        if (existingUser && existingUser._id.toString() !== userId) {
-            return res.status(400).json({ error: 'Username is already taken.' });
+        const user = await User.findById(req.params.userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
         }
-        const user = await StudyUser.findByIdAndUpdate(userId, { username: newUsername }, { new: true });
-        if (!user) return res.status(404).json({ error: 'User not found.' });
-        res.status(200).json({
-            message: 'Username updated successfully!',
-            user: { id: user.id, username: user.username, email: user.email, settings: user.settings }
+        res.json(user);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+app.post('/api/users', async (req, res) => {
+    try {
+        const { name, email, password } = req.body;
+        const newUser = new User({ name, email, password });
+        await newUser.save();
+        res.status(201).json(newUser);
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+app.put('/api/users/:userId', async (req, res) => {
+    try {
+        const { name, email, password } = req.body;
+        const updatedUser = await User.findByIdAndUpdate(
+            req.params.userId,
+            { name, email, password },
+            { new: true, runValidators: true }
+        );
+        if (!updatedUser) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        res.json(updatedUser);
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+app.delete('/api/users/:userId', async (req, res) => {
+    try {
+        const deletedUser = await User.findByIdAndDelete(req.params.userId);
+        if (!deletedUser) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        res.json({ message: 'User deleted successfully' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// == NOTES ==
+app.get('/api/notes/:userId', async (req, res) => {
+    try {
+        const notes = await Note.find({ userId: req.params.userId });
+        res.json(notes);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+app.post('/api/notes', async (req, res) => {
+    try {
+        const { userId, content } = req.body;
+        const newNote = new Note({ userId, content });
+        await newNote.save();
+        res.status(201).json(newNote);
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+app.put('/api/notes/:noteId', async (req, res) => {
+    try {
+        const { content } = req.body;
+        const updatedNote = await Note.findByIdAndUpdate(
+            req.params.noteId,
+            { content },
+            { new: true }
+        );
+        if (!updatedNote) {
+            return res.status(404).json({ error: 'Note not found' });
+        }
+        res.json(updatedNote);
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+app.delete('/api/notes/:noteId', async (req, res) => {
+    try {
+        const deletedNote = await Note.findByIdAndDelete(req.params.noteId);
+        if (!deletedNote) {
+            return res.status(404).json({ error: 'Note not found' });
+        }
+        res.json({ message: 'Note deleted successfully' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// == POST BOARD ==
+app.get('/api/posts', async (req, res) => {
+    try {
+        const posts = await PostBoard.find({}).populate('user', 'name').sort({ createdAt: -1 });
+        res.json(posts);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+app.post('/api/posts', async (req, res) => {
+    try {
+        const { user, title, content } = req.body;
+        const newPost = new PostBoard({ user, title, content });
+        await newPost.save();
+        res.status(201).json(newPost);
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+app.post('/api/posts/:postId/comment', async (req, res) => {
+    try {
+        const { user, text } = req.body;
+        const post = await PostBoard.findById(req.params.postId);
+        if (!post) {
+            return res.status(404).json({ error: 'Post not found' });
+        }
+        post.comments.push({ user, text });
+        await post.save();
+        res.status(201).json(post);
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+// ===============================================================================================
+// STUDY APP ROUTES
+// ===============================================================================================
+
+// == AUTH ==
+app.post('/api/study/register', async (req, res) => {
+    try {
+        const { username, email, password, securityQuestion, securityAnswer } = req.body;
+        const existingUser = await StudyUser.findOne({ $or: [{ email }, { username }] });
+        if (existingUser) {
+            return res.status(400).json({ error: 'Username or email already exists' });
+        }
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedAnswer = await bcrypt.hash(securityAnswer, 10);
+        const user = new StudyUser({ username, email, password: hashedPassword, securityQuestion, securityAnswer: hashedAnswer });
+        await user.save();
+        res.status(201).json({
+            _id: user._id,
+            username: user.username,
+            settings: user.settings
         });
     } catch (e) {
-        res.status(500).json({ error: "Server error: " + e.message });
+        res.status(400).json({ error: e.message });
     }
 });
-app.put('/api/study/user/password', async (req, res) => {
-    const { userId, currentPassword, newPassword } = req.body;
-    if (!userId || !currentPassword || !newPassword) return res.status(400).json({ error: 'All fields are required.' });
-    if (newPassword.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters long.' });
+app.post('/api/study/login', async (req, res) => {
     try {
-        const user = await StudyUser.findById(userId);
-        if (!user) return res.status(404).json({ error: 'User not found.' });
-        const isMatch = await bcrypt.compare(currentPassword, user.password);
-        if (!isMatch) return res.status(400).json({ error: 'Incorrect current password.' });
-        const salt = await bcrypt.genSalt(10);
-        user.password = await bcrypt.hash(newPassword, salt);
-        await user.save();
-        res.status(200).json({ message: 'Password updated successfully!' });
+        const { email, password } = req.body;
+        const user = await StudyUser.findOne({ email });
+        if (!user) {
+            return res.status(400).json({ error: 'Invalid credentials' });
+        }
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ error: 'Invalid credentials' });
+        }
+        res.json({
+            _id: user._id,
+            username: user.username,
+            settings: user.settings
+        });
     } catch (e) {
-        res.status(500).json({ error: "Server error: " + e.message });
+        res.status(500).json({ error: e.message });
     }
 });
-app.put('/api/study/settings/darkmode', async (req, res) => {
-    const { userId, darkMode } = req.body;
-    if (!userId || typeof darkMode !== 'boolean') {
-        return res.status(400).json({ error: 'User ID and dark mode setting are required.' });
-    }
+
+// Forgot Password Step 1: Get Security Question
+app.post('/api/study/forgot-password/step1', async (req, res) => {
     try {
+        const { email } = req.body;
+        const user = await StudyUser.findOne({ email });
+        if (!user) {
+            return res.status(404).json({ error: 'User with that email not found.' });
+        }
+        res.json({ userId: user._id, securityQuestion: user.securityQuestion });
+    } catch (error) {
+        res.status(500).json({ error: 'An error occurred. Please try again.' });
+    }
+});
+
+// Forgot Password Step 2: Verify Answer and Reset Password
+app.post('/api/study/forgot-password/step2', async (req, res) => {
+    try {
+        const { userId, securityAnswer, newPassword } = req.body;
         const user = await StudyUser.findById(userId);
         if (!user) {
             return res.status(404).json({ error: 'User not found.' });
         }
-        if (!user.settings) user.settings = { darkMode: false };
-        user.settings.darkMode = darkMode;
+
+        const isAnswerMatch = await bcrypt.compare(securityAnswer, user.securityAnswer);
+        if (!isAnswerMatch) {
+            return res.status(400).json({ error: 'Incorrect answer to the security question.' });
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        user.password = hashedPassword;
         await user.save();
-        res.status(200).json({ message: 'Settings updated successfully!', settings: user.settings });
-    } catch (e) {
-        res.status(500).json({ error: "Server error: " + e.message });
+
+        res.json({ message: 'Password has been reset successfully!' });
+    } catch (error) {
+        res.status(500).json({ error: 'An error occurred. Please try again.' });
     }
 });
 
-//=======================================================
-// Study Dashboard Task API
-//=======================================================
+// == USER SETTINGS ==
+app.get('/api/study/settings', async (req, res) => {
+    try {
+        const user = await StudyUser.findById(req.query.userId);
+        res.json(user.settings);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+app.put('/api/study/settings', async (req, res) => {
+    try {
+        const { userId, settings } = req.body;
+        const user = await StudyUser.findById(userId);
+        user.settings = { ...user.settings, ...settings };
+        await user.save();
+        res.json(user.settings);
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+app.put('/api/study/password', async (req, res) => {
+    try {
+        const { userId, currentPassword, newPassword } = req.body;
+        const user = await StudyUser.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ error: 'Incorrect current password' });
+        }
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        user.password = hashedPassword;
+        await user.save();
+        res.json({ message: 'Password updated successfully' });
+    } catch (e) {
+        res.status(500).json({ error: 'An internal error occurred' });
+    }
+});
+
+// == TASKS ==
 app.get('/api/study/tasks', async (req, res) => {
     try {
         const tasks = await Task.find({ userId: req.query.userId });
@@ -493,51 +335,87 @@ app.get('/api/study/tasks', async (req, res) => {
 });
 app.post('/api/study/tasks', async (req, res) => {
     try {
-        const task = new Task({ ...req.body, subTasks: [] });
+        const { text, subject, time, deadline, userId, subTasks } = req.body;
+        const task = new Task({ text, subject, time, deadline, userId, subTasks });
         await task.save();
         res.status(201).json(task);
     } catch (e) {
         res.status(400).json({ error: e.message });
     }
 });
-app.put('/api/study/tasks/:id', async (req, res) => {
+
+// NEW: Endpoint to update a task and its subtasks
+app.put('/api/study/tasks/:taskId', async (req, res) => {
     try {
-        const task = await Task.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        const { taskId } = req.params;
+        const { text, subject, time, deadline, subTasks } = req.body;
+
+        // Find the task and update it with the new data
+        const updatedTask = await Task.findByIdAndUpdate(
+            taskId,
+            { text, subject, time, deadline, subTasks },
+            { new: true, runValidators: true } // Return the updated document and run schema validators
+        );
+
+        if (!updatedTask) {
+            return res.status(404).json({ error: 'Task not found' });
+        }
+
+        res.json(updatedTask);
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+app.put('/api/study/tasks/:taskId/toggle', async (req, res) => {
+    try {
+        const task = await Task.findById(req.params.taskId);
+        task.completed = !task.completed;
+        await task.save();
         res.json(task);
     } catch (e) {
         res.status(400).json({ error: e.message });
     }
 });
-app.delete('/api/study/tasks/:id', async (req, res) => {
+app.delete('/api/study/tasks/:taskId', async (req, res) => {
     try {
-        await Task.findByIdAndDelete(req.params.id);
+        await Task.findByIdAndDelete(req.params.taskId);
         res.json({ message: 'Task deleted' });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        res.status(400).json({ error: e.message });
     }
 });
-app.post('/api/study/tasks/:id/subtasks', async (req, res) => {
+
+// == SUBTASKS ==
+app.post('/api/study/tasks/:taskId/subtasks', async (req, res) => {
     try {
-        const task = await Task.findById(req.params.id);
-        if (!task) return res.status(404).json({ error: 'Task not found' });
-        
-        const newSubTask = { text: req.body.text, completed: false };
-        task.subTasks.push(newSubTask);
+        const task = await Task.findById(req.params.taskId);
+        if (!task) {
+            return res.status(404).json({ error: 'Task not found' });
+        }
+        const { text } = req.body;
+        task.subTasks.push({ text, completed: false });
         await task.save();
         res.status(201).json(task);
     } catch (e) {
         res.status(400).json({ error: e.message });
     }
 });
-app.put('/api/study/tasks/:id/subtasks/:subtaskId', async (req, res) => {
+app.put('/api/study/tasks/:taskId/subtasks/:subTaskId/toggle', async (req, res) => {
     try {
-        const task = await Task.findById(req.params.id);
-        if (!task) return res.status(404).json({ error: 'Task not found' });
-
-        const subTask = task.subTasks.id(req.params.subtaskId);
-        if (!subTask) return res.status(404).json({ error: 'Sub-task not found' });
-
-        subTask.completed = req.body.completed;
+        const task = await Task.findById(req.params.taskId);
+        const subTask = task.subTasks.id(req.params.subTaskId);
+        subTask.completed = !subTask.completed;
+        await task.save();
+        res.json(task);
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+app.delete('/api/study/tasks/:taskId/subtasks/:subTaskId', async (req, res) => {
+    try {
+        const task = await Task.findById(req.params.taskId);
+        task.subTasks.id(req.params.subTaskId).remove();
         await task.save();
         res.json(task);
     } catch (e) {
@@ -545,9 +423,7 @@ app.put('/api/study/tasks/:id/subtasks/:subtaskId', async (req, res) => {
     }
 });
 
-//=======================================================
-// Study Dashboard Data API (Logs & Streak)
-//=======================================================
+// == STUDY LOGS AND STREAK ==
 app.get('/api/study/logs', async (req, res) => {
     try {
         const user = await StudyUser.findById(req.query.userId);
@@ -581,20 +457,11 @@ app.put('/api/study/streak', async (req, res) => {
         await StudyUser.findByIdAndUpdate(userId, { studyStreak, lastStudyDay });
         res.json({ message: 'Streak updated' });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        res.status(400).json({ error: e.message });
     }
 });
 
-const start = async() => {
-  try{
-    await mongoose.connect(CONNECTION);
-    app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
-    });
-  } catch (e) {
-    console.log(e.message);
-  }
-};
-
-start();
-
+app.listen(8800, () => {
+    connect();
+    console.log('Server is running on port 8800');
+});

@@ -20,12 +20,24 @@ mongoose.set('strictQuery', false);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// CORRECTED CORS MIDDLEWARE
 app.use((req, res, next) => {
+  // --- DEBUG LOG: Log all incoming requests ---
+  console.log(`[BACKEND] Incoming Request: ${req.method} ${req.originalUrl}`);
+	
   const allowedOrigins = [ 'http://127.0.0.1:5500', 'https://petbed.github.io', 'http://127.0.0.1:5501', 'http://127.0.0.1:5500/index.html', 'https://fcgh4w.csb.app', ];
   const origin = req.headers.origin;
   if (allowedOrigins.some(allowedOrigin => origin?.startsWith(allowedOrigin))) { res.setHeader('Access-Control-Allow-Origin', origin); }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  // FIX: Handle pre-flight OPTIONS request
+  if (req.method === 'OPTIONS') {
+    console.log('[BACKEND] Handling pre-flight OPTIONS request. Sending 200 OK.');
+    return res.sendStatus(200);
+  }
+  
   next();
 });
 
@@ -573,11 +585,34 @@ app.put('/api/study/tasks/:id/subtasks/:subtaskId', async (req, res) => {
         const subTask = task.subTasks.id(req.params.subtaskId);
         if (!subTask) return res.status(404).json({ error: 'Sub-task not found' });
 
-        subTask.completed = req.body.completed;
+        // Update fields based on what's provided in the request body
+        if (req.body.text) {
+            subTask.text = req.body.text;
+        }
+        if (typeof req.body.completed === 'boolean') {
+            subTask.completed = req.body.completed;
+        }
+
         await task.save();
         res.json(task);
     } catch (e) {
         res.status(400).json({ error: e.message });
+    }
+});
+
+app.delete('/api/study/tasks/:id/subtasks/:subtaskId', async (req, res) => {
+    try {
+        const task = await Task.findById(req.params.id);
+        if (!task) return res.status(404).json({ error: 'Task not found' });
+
+        // Correctly pull the subtask from the array
+        task.subTasks.pull({ _id: req.params.subtaskId });
+
+        await task.save();
+        res.json(task);
+    } catch (e) {
+        console.error("Subtask deletion error:", e);
+        res.status(500).json({ error: 'Failed to delete sub-task.' });
     }
 });
 
@@ -593,14 +628,44 @@ app.get('/api/study/logs', async (req, res) => {
     }
 });
 app.put('/api/study/logs', async (req, res) => {
+    // --- DEBUG LOG: Log received body ---
+    console.log('[BACKEND] Received PUT request on /api/study/logs');
+    console.log('[BACKEND] Request Body:', req.body);
     try {
         const { userId, studyLogs } = req.body;
+        console.log(`[BACKEND] Destructured - User ID: ${userId}, Logs: ${JSON.stringify(studyLogs)}`);
+        
+        if (!userId) {
+            console.log('[BACKEND] Error: User ID is missing in the request body.');
+            return res.status(400).json({ error: 'User ID is required.' });
+        }
+
         const user = await StudyUser.findById(userId);
-        user.studyLogs = studyLogs;
+        if (!user) {
+            console.log(`[BACKEND] Error: User not found for ID: ${userId}`);
+            return res.status(404).json({ error: 'User not found' });
+        }
+        console.log(`[BACKEND] Found user: ${user.username}`);
+
+
+        if (studyLogs && typeof studyLogs === 'object') {
+            console.log('[BACKEND] Clearing old logs and setting new ones.');
+            user.studyLogs.clear(); 
+            for (const subject in studyLogs) {
+                if (Object.prototype.hasOwnProperty.call(studyLogs, subject)) {
+                    user.studyLogs.set(subject, studyLogs[subject]);
+                }
+            }
+        }
+        
+        console.log('[BACKEND] Attempting to save user document...');
         await user.save();
+        console.log('[BACKEND] User document saved successfully.');
         res.json({ message: 'Logs updated' });
     } catch (e) {
-        res.status(400).json({ error: e.message });
+        // --- DEBUG LOG: Log the specific error from Mongoose/server ---
+        console.error('[BACKEND] CRITICAL ERROR in /api/study/logs:', e);
+        res.status(400).json({ error: e.message, details: e.toString() });
     }
 });
 app.get('/api/study/streak', async (req, res) => {
@@ -617,7 +682,7 @@ app.put('/api/study/streak', async (req, res) => {
         await StudyUser.findByIdAndUpdate(userId, { studyStreak, lastStudyDay });
         res.json({ message: 'Streak updated' });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        res.status(400).json({ error: e.message });
     }
 });
 
@@ -633,3 +698,4 @@ const start = async() => {
 };
 
 start();
+
