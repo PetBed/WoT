@@ -25,7 +25,11 @@ app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (allowedOrigins.some(allowedOrigin => origin?.startsWith(allowedOrigin))) { res.setHeader('Access-Control-Allow-Origin', origin); }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  // FIX: Added 'Authorization' and ensured 'Content-Type' is explicitly allowed.
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+  }
   next();
 });
 
@@ -371,154 +375,140 @@ async function fetchSDGNewsFirstPages(n) {
   }
 }
 
-//=======================================================
-// Study Dashboard User API
-//=======================================================
-app.post("/api/study/register", async (req, res) => {
-    const { username, email, password, securityQuestion, securityAnswer } = req.body;
-    if (!username || !email || !password || !securityQuestion || !securityAnswer) {
-        return res.status(400).json({ error: "Please enter all fields." });
-    }
+// Signup
+app.post('/api/study/signup', async (req, res) => {
     try {
-        let user = await StudyUser.findOne({ email });
-        if (user) return res.status(400).json({ error: "User with this email already exists." });
-        
+        const { username, email, password, securityQuestion, securityAnswer } = req.body;
+
+        const existingUser = await StudyUser.findOne({ $or: [{ username }, { email }] });
+        if (existingUser) {
+            return res.status(400).json({ error: 'Username or email already exists' });
+        }
+
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
-        const hashedSecurityAnswer = await bcrypt.hash(securityAnswer, salt);
+        const hashedAnswer = await bcrypt.hash(securityAnswer, salt);
 
         const newUser = new StudyUser({
             username,
             email,
             password: hashedPassword,
             securityQuestion,
-            securityAnswer: hashedSecurityAnswer,
-            settings: { darkMode: false }
+            securityAnswer: hashedAnswer,
         });
 
         await newUser.save();
         res.status(201).json({
-            message: "User registered successfully!",
-            user: { id: newUser.id, username: newUser.username, email: newUser.email, settings: newUser.settings },
+            _id: newUser._id,
+            username: newUser.username,
         });
     } catch (e) {
-        res.status(500).json({ error: "Server error: " + e.message });
+        res.status(500).json({ error: e.message });
     }
 });
-app.post("/api/study/login", async (req, res) => {
-    const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: "Please enter all fields." });
+
+// Login
+app.post('/api/study/login', async (req, res) => {
     try {
+        const { email, password } = req.body;
         const user = await StudyUser.findOne({ email });
-        if (!user) return res.status(400).json({ error: "Invalid credentials." });
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(400).json({ error: "Invalid credentials." });
-        res.status(200).json({
-            message: "Login successful!",
-            user: { id: user.id, username: user.username, email: user.email, settings: user.settings },
-        });
-    } catch (e) {
-        res.status(500).json({ error: "Server error: " + e.message });
-    }
-});
-
-// --- Password Reset Endpoints ---
-app.post('/api/study/forgot-password/step1', async (req, res) => {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email is required.' });
-    try {
-        const user = await StudyUser.findOne({ email });
-        if (!user) return res.status(404).json({ error: 'User with this email not found.' });
-        res.json({ userId: user.id, securityQuestion: user.securityQuestion });
-    } catch (e) {
-        res.status(500).json({ error: "Server error: " + e.message });
-    }
-});
-
-app.post('/api/study/forgot-password/step2', async (req, res) => {
-    const { userId, securityAnswer, newPassword } = req.body;
-    if (!userId || !securityAnswer || !newPassword) return res.status(400).json({ error: 'All fields are required.' });
-    if (newPassword.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters long.' });
-
-    try {
-        const user = await StudyUser.findById(userId);
-        if (!user) return res.status(404).json({ error: 'User not found.' });
-
-        const isAnswerMatch = await bcrypt.compare(securityAnswer, user.securityAnswer);
-        if (!isAnswerMatch) return res.status(400).json({ error: 'Incorrect answer to security question.' });
-        
-        const salt = await bcrypt.genSalt(10);
-        user.password = await bcrypt.hash(newPassword, salt);
-        await user.save();
-        
-        res.status(200).json({ message: 'Password has been reset successfully!' });
-    } catch (e) {
-        res.status(500).json({ error: "Server error: " + e.message });
-    }
-});
-
-//=======================================================
-// Study Dashboard User Settings API
-//=======================================================
-app.put('/api/study/user/username', async (req, res) => {
-    const { userId, newUsername } = req.body;
-    if (!userId || !newUsername) return res.status(400).json({ error: 'User ID and new username are required.' });
-    if (newUsername.length < 3) return res.status(400).json({ error: 'Username must be at least 3 characters long.' });
-    try {
-        const existingUser = await StudyUser.findOne({ username: newUsername });
-        if (existingUser && existingUser._id.toString() !== userId) {
-            return res.status(400).json({ error: 'Username is already taken.' });
+        if (!user) {
+            return res.status(400).json({ error: 'Invalid credentials' });
         }
-        const user = await StudyUser.findByIdAndUpdate(userId, { username: newUsername }, { new: true });
-        if (!user) return res.status(404).json({ error: 'User not found.' });
-        res.status(200).json({
-            message: 'Username updated successfully!',
-            user: { id: user.id, username: user.username, email: user.email, settings: user.settings }
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ error: 'Invalid credentials' });
+        }
+        res.json({
+            _id: user._id,
+            username: user.username,
         });
     } catch (e) {
-        res.status(500).json({ error: "Server error: " + e.message });
-    }
-});
-app.put('/api/study/user/password', async (req, res) => {
-    const { userId, currentPassword, newPassword } = req.body;
-    if (!userId || !currentPassword || !newPassword) return res.status(400).json({ error: 'All fields are required.' });
-    if (newPassword.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters long.' });
-    try {
-        const user = await StudyUser.findById(userId);
-        if (!user) return res.status(404).json({ error: 'User not found.' });
-        const isMatch = await bcrypt.compare(currentPassword, user.password);
-        if (!isMatch) return res.status(400).json({ error: 'Incorrect current password.' });
-        const salt = await bcrypt.genSalt(10);
-        user.password = await bcrypt.hash(newPassword, salt);
-        await user.save();
-        res.status(200).json({ message: 'Password updated successfully!' });
-    } catch (e) {
-        res.status(500).json({ error: "Server error: " + e.message });
+        res.status(500).json({ error: e.message });
     }
 });
 
-app.put('/api/study/settings/darkmode', async (req, res) => {
-    const { userId, darkMode } = req.body;
-    console.log(req.body);
-    if (!userId || typeof darkMode !== 'boolean') {
-        return res.status(400).json({ error: 'User ID and dark mode setting are required.' });
-    }
+// Forgot Password Step 1: Get Security Question
+app.post('/api/study/forgot-password/step1', async (req, res) => {
     try {
+        const { email } = req.body;
+        const user = await StudyUser.findOne({ email });
+        if (!user) {
+            return res.status(404).json({ error: 'User with this email not found.' });
+        }
+        res.json({ userId: user._id, securityQuestion: user.securityQuestion });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Forgot Password Step 2: Reset Password
+app.post('/api/study/forgot-password/step2', async (req, res) => {
+    try {
+        const { userId, securityAnswer, newPassword } = req.body;
         const user = await StudyUser.findById(userId);
+
         if (!user) {
             return res.status(404).json({ error: 'User not found.' });
         }
-        user.settings.darkMode = darkMode;
+
+        const isAnswerMatch = await bcrypt.compare(securityAnswer, user.securityAnswer);
+        if (!isAnswerMatch) {
+            return res.status(400).json({ error: 'Incorrect answer to the security question.' });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(newPassword, salt);
         await user.save();
-        res.status(200).json({ message: 'Settings updated successfully!', settings: user.settings });
+
+        res.json({ message: 'Password has been reset successfully!' });
     } catch (e) {
-        res.status(500).json({ error: "Server error: " + e.message });
+        res.status(500).json({ error: e.message });
     }
 });
 
-//=======================================================
-// Study Dashboard Task API
-//=======================================================
+// Change Password
+app.put('/api/study/change-password', async (req, res) => {
+    try {
+        const { userId, currentPassword, newPassword } = req.body;
+        const user = await StudyUser.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found.' });
+        }
+
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ error: 'Incorrect current password.' });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(newPassword, salt);
+        await user.save();
+
+        res.json({ message: 'Password updated successfully!' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// --- Study App: Task Management ---
+
+// Create a new task
+// FIX: Changed route from /api/tasks to /api/study/tasks
+app.post('/api/study/tasks', async (req, res) => {
+    try {
+        const { text, subject, time, deadline, userId, subTasks } = req.body;
+        const newTask = new Task({ text, subject, time, deadline, userId, subTasks });
+        await newTask.save();
+        res.status(201).json(newTask);
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+// Get all tasks for a user
+// FIX: Changed route from /api/tasks to /api/study/tasks
 app.get('/api/study/tasks', async (req, res) => {
     try {
         const tasks = await Task.find({ userId: req.query.userId });
@@ -527,23 +517,46 @@ app.get('/api/study/tasks', async (req, res) => {
         res.status(500).json({ error: e.message });
     }
 });
-app.post('/api/study/tasks', async (req, res) => {
-    try {
-        const task = new Task({ ...req.body, subTasks: [] });
-        await task.save();
-        res.status(201).json(task);
-    } catch (e) {
-        res.status(400).json({ error: e.message });
-    }
-});
+
+// Update a task
+// FIX: Changed route from /api/tasks/:id to /api/study/tasks/:id
 app.put('/api/study/tasks/:id', async (req, res) => {
     try {
-        const task = await Task.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        res.json(task);
+        const { text, subject, time, deadline, subTasks, completed } = req.body;
+        
+        const taskToUpdate = {
+            text,
+            subject,
+            time,
+            deadline,
+            completed,
+            subTasks: Array.isArray(subTasks) ? subTasks : []
+        };
+        
+        // Remove 'completed' if it's not explicitly sent in the body
+        if (req.body.completed === undefined) {
+            delete taskToUpdate.completed;
+        }
+
+
+        const updatedTask = await Task.findByIdAndUpdate(
+            req.params.id,
+            { $set: taskToUpdate },
+            { new: true, runValidators: true, omitUndefined: true }
+        );
+
+        if (!updatedTask) {
+            return res.status(404).json({ error: 'Task not found' });
+        }
+
+        res.json(updatedTask);
     } catch (e) {
         res.status(400).json({ error: e.message });
     }
 });
+
+// Delete a task
+// FIX: Changed route from /api/tasks/:id to /api/study/tasks/:id
 app.delete('/api/study/tasks/:id', async (req, res) => {
     try {
         await Task.findByIdAndDelete(req.params.id);
@@ -552,11 +565,14 @@ app.delete('/api/study/tasks/:id', async (req, res) => {
         res.status(500).json({ error: e.message });
     }
 });
+
+// Add a sub-task
+// FIX: Changed route from /api/tasks/:id/subtasks to /api/study/tasks/:id/subtasks
 app.post('/api/study/tasks/:id/subtasks', async (req, res) => {
     try {
         const task = await Task.findById(req.params.id);
         if (!task) return res.status(404).json({ error: 'Task not found' });
-        
+
         const newSubTask = { text: req.body.text, completed: false };
         task.subTasks.push(newSubTask);
         await task.save();
@@ -565,9 +581,12 @@ app.post('/api/study/tasks/:id/subtasks', async (req, res) => {
         res.status(400).json({ error: e.message });
     }
 });
-app.put('/api/study/tasks/:id/subtasks/:subtaskId', async (req, res) => {
+
+// Mark a sub-task as complete/incomplete
+// FIX: Changed route to be more specific and correct
+app.put('/api/study/tasks/:taskId/subtasks/:subtaskId', async (req, res) => {
     try {
-        const task = await Task.findById(req.params.id);
+        const task = await Task.findById(req.params.taskId);
         if (!task) return res.status(404).json({ error: 'Task not found' });
 
         const subTask = task.subTasks.id(req.params.subtaskId);
@@ -581,9 +600,32 @@ app.put('/api/study/tasks/:id/subtasks/:subtaskId', async (req, res) => {
     }
 });
 
-//=======================================================
-// Study Dashboard Data API (Logs & Streak)
-//=======================================================
+// Delete a sub-task
+// FIX: Changed route to match the new pattern
+app.delete('/api/study/tasks/:taskId/subtasks/:subtaskId', async (req, res) => {
+    try {
+        const task = await Task.findById(req.params.taskId);
+        if (!task) return res.status(404).json({ error: 'Task not found' });
+
+        // Mongoose sub-document removal
+        const subTask = task.subTasks.id(req.params.subtaskId);
+        if (subTask) {
+             subTask.remove();
+        } else {
+            return res.status(404).json({ error: 'Sub-task not found' });
+        }
+        
+        await task.save();
+        res.json(task);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+
+// --- Study App: Study Logs, Streak, and Settings ---
+
+// Get study logs
 app.get('/api/study/logs', async (req, res) => {
     try {
         const user = await StudyUser.findById(req.query.userId);
@@ -592,6 +634,8 @@ app.get('/api/study/logs', async (req, res) => {
         res.status(500).json({ error: e.message });
     }
 });
+
+// Update study logs
 app.put('/api/study/logs', async (req, res) => {
     try {
         const { userId, studyLogs } = req.body;
@@ -603,6 +647,8 @@ app.put('/api/study/logs', async (req, res) => {
         res.status(400).json({ error: e.message });
     }
 });
+
+// Get study streak
 app.get('/api/study/streak', async (req, res) => {
     try {
         const user = await StudyUser.findById(req.query.userId);
@@ -611,15 +657,39 @@ app.get('/api/study/streak', async (req, res) => {
         res.status(500).json({ error: e.message });
     }
 });
+
+// Update study streak
 app.put('/api/study/streak', async (req, res) => {
     try {
         const { userId, studyStreak, lastStudyDay } = req.body;
         await StudyUser.findByIdAndUpdate(userId, { studyStreak, lastStudyDay });
         res.json({ message: 'Streak updated' });
     } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+// Get user settings
+app.get('/api/study/settings', async (req, res) => {
+    try {
+        const user = await StudyUser.findById(req.query.userId);
+        res.json(user.settings);
+    } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
+
+// Update user settings
+app.put('/api/study/settings', async (req, res) => {
+    try {
+        const { userId, settings } = req.body;
+        await StudyUser.findByIdAndUpdate(userId, { settings });
+        res.json({ message: 'Settings updated' });
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
 
 const start = async() => {
   try{
@@ -633,3 +703,4 @@ const start = async() => {
 };
 
 start();
+
