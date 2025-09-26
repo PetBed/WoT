@@ -41,8 +41,12 @@ const studyUserSchema = new mongoose.Schema({
             type: Boolean,
             default: false
         }
-    }
+    },
+    // EDITED: Added the sound library field to the schema
+    soundLibrary: [{
+        name: { type: String, required: true },
+        url: { type: String, required: true }
+    }]
 });
 
 module.exports = mongoose.model('StudyUser', studyUserSchema);
-

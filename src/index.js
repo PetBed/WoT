@@ -425,6 +425,18 @@ app.post("/api/study/login", async (req, res) => {
         if (!user) return res.status(400).json({ error: "Invalid credentials." });
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(400).json({ error: "Invalid credentials." });
+
+        let needsSave = false;
+        if (typeof user.soundLibrary === 'undefined') {
+            user.soundLibrary = [];
+            needsSave = true;
+        }
+
+        // Can add other migration checks here in the future
+        if (needsSave) {
+            await user.save();
+        }
+
         res.status(200).json({
             message: "Login successful!",
             user: { id: user.id, username: user.username, email: user.email, settings: user.settings },
@@ -681,6 +693,84 @@ app.put('/api/study/streak', async (req, res) => {
         const { userId, studyStreak, lastStudyDay } = req.body;
         await StudyUser.findByIdAndUpdate(userId, { studyStreak, lastStudyDay });
         res.json({ message: 'Streak updated' });
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+// ==========================================
+// SOUND LIBRARY ROUTES
+// ==========================================
+
+// GET user's sound library
+app.get('/api/study/sound-library', async (req, res) => {
+    try {
+        const user = await StudyUser.findById(req.query.userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        res.json(user.soundLibrary || []);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ADD a new sound to the library
+app.post('/api/study/sound-library/add', async (req, res) => {
+    try {
+        const { userId, name, url } = req.body;
+        if (!name || !name.trim() || !url || !url.trim()) {
+             return res.status(400).json({ error: 'Name and URL cannot be empty.' });
+        }
+        const user = await StudyUser.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        user.soundLibrary.push({ name, url });
+        await user.save();
+        res.status(201).json(user.soundLibrary);
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+// DELETE a sound from the library
+app.delete('/api/study/sound-library/delete/:soundId', async (req, res) => {
+    try {
+        const { userId } = req.body;
+        const { soundId } = req.params;
+        const user = await StudyUser.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        user.soundLibrary.pull({ _id: soundId });
+        await user.save();
+        res.json(user.soundLibrary);
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+// UPDATE a sound in the library
+app.put('/api/study/sound-library/edit/:soundId', async (req, res) => {
+    try {
+        const { userId, name, url } = req.body;
+        const { soundId } = req.params;
+        if (!name || !name.trim() || !url || !url.trim()) {
+             return res.status(400).json({ error: 'Name and URL cannot be empty.' });
+        }
+        const user = await StudyUser.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        const sound = user.soundLibrary.id(soundId);
+        if (!sound) {
+            return res.status(404).json({ error: 'Sound not found in library' });
+        }
+        sound.name = name;
+        sound.url = url;
+        await user.save();
+        res.json(user.soundLibrary);
     } catch (e) {
         res.status(400).json({ error: e.message });
     }
