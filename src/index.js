@@ -14,6 +14,8 @@ const PostBoard = require('./models/Post Board/post');
 // Study App Models
 const StudyUser = require('./models/studyUser');
 const Task = require('./models/task'); // Task model for the study app
+// ADDED: Import the new FlashcardSet model
+const FlashcardSet = require('./models/flashcardSet');
 
 const app = express();
 mongoose.set('strictQuery', false);
@@ -773,6 +775,136 @@ app.put('/api/study/sound-library/edit/:soundId', async (req, res) => {
         res.json(user.soundLibrary);
     } catch (e) {
         res.status(400).json({ error: e.message });
+    }
+});
+
+// ADDED: All routes for the Flashcard feature
+// ==========================================
+// FLASHCARD SETS API
+// ==========================================
+
+// --- Flashcard Set Management ---
+
+// GET all flashcard sets for a user
+app.get('/api/study/flashcard-sets', async (req, res) => {
+    try {
+        const { userId } = req.query;
+        if (!userId) return res.status(400).json({ error: 'User ID is required.' });
+        const sets = await FlashcardSet.find({ userId }).sort({ updatedAt: -1 });
+        res.json(sets);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// GET a single flashcard set by its ID
+app.get('/api/study/flashcard-sets/:setId', async (req, res) => {
+    try {
+        const set = await FlashcardSet.findById(req.params.setId);
+        if (!set) return res.status(404).json({ error: 'Flashcard set not found.' });
+        // Optional: check if set.userId matches logged-in user for security
+        res.json(set);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+
+// POST (create) a new flashcard set
+app.post('/api/study/flashcard-sets', async (req, res) => {
+    try {
+        const { name, subject, userId } = req.body;
+        if (!name || !subject || !userId) {
+            return res.status(400).json({ error: 'Name, subject, and user ID are required.' });
+        }
+        const newSet = new FlashcardSet({ name, subject, userId, flashcards: [] });
+        await newSet.save();
+        res.status(201).json(newSet);
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+// PUT (update) a flashcard set's details
+app.put('/api/study/flashcard-sets/:setId', async (req, res) => {
+    try {
+        const { name, subject } = req.body;
+        const updatedSet = await FlashcardSet.findByIdAndUpdate(
+            req.params.setId,
+            { name, subject },
+            { new: true, runValidators: true }
+        );
+        if (!updatedSet) return res.status(404).json({ error: 'Flashcard set not found.' });
+        res.json(updatedSet);
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+// DELETE a flashcard set
+app.delete('/api/study/flashcard-sets/:setId', async (req, res) => {
+    try {
+        const deletedSet = await FlashcardSet.findByIdAndDelete(req.params.setId);
+        if (!deletedSet) return res.status(404).json({ error: 'Flashcard set not found.' });
+        res.json({ message: 'Flashcard set deleted successfully.' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+
+// --- Individual Flashcard Management within a Set ---
+
+// POST (add) a new card to a set
+app.post('/api/study/flashcard-sets/:setId/cards', async (req, res) => {
+    try {
+        const { front, back } = req.body;
+        if (!front || !back) {
+            return res.status(400).json({ error: 'Front and back content are required.' });
+        }
+        const set = await FlashcardSet.findById(req.params.setId);
+        if (!set) return res.status(404).json({ error: 'Flashcard set not found.' });
+
+        set.flashcards.push({ front, back });
+        await set.save();
+        res.status(201).json(set);
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+// PUT (update) a single card within a set
+app.put('/api/study/flashcard-sets/:setId/cards/:cardId', async (req, res) => {
+    try {
+        const { front, back } = req.body;
+        const set = await FlashcardSet.findById(req.params.setId);
+        if (!set) return res.status(404).json({ error: 'Flashcard set not found.' });
+
+        const card = set.flashcards.id(req.params.cardId);
+        if (!card) return res.status(404).json({ error: 'Flashcard not found in this set.' });
+
+        card.front = front || card.front;
+        card.back = back || card.back;
+        
+        await set.save();
+        res.json(set);
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+// DELETE a single card from a set
+app.delete('/api/study/flashcard-sets/:setId/cards/:cardId', async (req, res) => {
+    try {
+        const set = await FlashcardSet.findById(req.params.setId);
+        if (!set) return res.status(404).json({ error: 'Flashcard set not found.' });
+
+        set.flashcards.pull({ _id: req.params.cardId });
+        
+        await set.save();
+        res.json(set);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
     }
 });
 
