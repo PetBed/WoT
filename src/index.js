@@ -908,6 +908,36 @@ app.delete('/api/study/flashcard-sets/:setId/cards/:cardId', async (req, res) =>
     }
 });
 
+app.put('/api/study/flashcard-sets/:setId/reorder-cards', async (req, res) => {
+    try {
+        const set = await FlashcardSet.findById(req.params.setId);
+        if (!set) {
+            return res.status(404).json({ error: 'Set not found' });
+        }
+        
+        const { orderedIds } = req.body;
+        if (!orderedIds || !Array.isArray(orderedIds)) {
+            return res.status(400).json({ error: 'Invalid data format' });
+        }
+
+        // Create a map for efficient lookup
+        const cardMap = new Map(set.flashcards.map(card => [card._id.toString(), card]));
+        
+        // Build the new flashcards array based on the received order
+        const reorderedFlashcards = orderedIds.map(id => cardMap.get(id)).filter(Boolean); // filter(Boolean) removes any undefined entries if an ID was invalid
+
+        if (reorderedFlashcards.length !== set.flashcards.length) {
+            return res.status(400).json({ error: 'ID mismatch, reorder failed' });
+        }
+
+        set.flashcards = reorderedFlashcards;
+        await set.save();
+        res.json(set);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 const start = async() => {
   try{
     await mongoose.connect(CONNECTION);
