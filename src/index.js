@@ -813,11 +813,15 @@ app.get('/api/study/flashcard-sets/:setId', async (req, res) => {
 // POST (create) a new flashcard set
 app.post('/api/study/flashcard-sets', async (req, res) => {
     try {
-        const { name, subject, userId } = req.body;
-        if (!name || !subject || !userId) {
-            return res.status(400).json({ error: 'Name, subject, and user ID are required.' });
-        }
-        const newSet = new FlashcardSet({ name, subject, userId, flashcards: [] });
+        // Destructure flashcards from the body along with other details
+        const { name, subject, userId, flashcards } = req.body;
+        const newSet = new FlashcardSet({
+            name,
+            subject,
+            userId: userId,
+            // Use the provided flashcards array, defaulting to an empty array if it's not present
+            flashcards: flashcards || []
+        });
         await newSet.save();
         res.status(201).json(newSet);
     } catch (e) {
@@ -828,10 +832,21 @@ app.post('/api/study/flashcard-sets', async (req, res) => {
 // PUT (update) a flashcard set's details
 app.put('/api/study/flashcard-sets/:setId', async (req, res) => {
     try {
-        const { name, subject } = req.body;
+        const { name, subject, flashcards } = req.body; // Added flashcards to destructuring
+        const updateData = { name, subject };
+
+        // Only include the flashcards field in the update if it's provided in the request
+        if (Array.isArray(flashcards)) {
+            // Basic validation for the flashcards array
+            updateData.flashcards = flashcards.map(card => ({
+                front: card.front || '',
+                back: card.back || ''
+            }));
+        }
+
         const updatedSet = await FlashcardSet.findByIdAndUpdate(
             req.params.setId,
-            { name, subject },
+            updateData,
             { new: true, runValidators: true }
         );
         if (!updatedSet) return res.status(404).json({ error: 'Flashcard set not found.' });
