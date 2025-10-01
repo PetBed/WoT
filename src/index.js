@@ -32,7 +32,8 @@ app.use((req, res, next) => {
   // --- DEBUG LOG: Log all incoming requests ---
   console.log(`[BACKEND] Incoming Request: ${req.method} ${req.originalUrl}`);
 	
-  const allowedOrigins = [ 'http://127.0.0.1:5500', 'https://petbed.github.io', 'http://127.0.0.1:5501', 'http://127.0.0.1:5500/index.html', 'https://fcgh4w.csb.app', ];
+  const allowedOrigins = [ 'http://127.0.0.1:5500', 'https://petbed.github.io', 'http://127.0.0.1:5501', 'http://127.0.0.1:5500/index.html', 'https://fcgh4w.csb.app', 'http://127.0.0.1:5501/Study%20Website/admin.html', 'https://petbed.github.io/Study%20Website/admin.html'
+  ];
   const origin = req.headers.origin;
   if (allowedOrigins.some(allowedOrigin => origin?.startsWith(allowedOrigin))) { res.setHeader('Access-Control-Allow-Origin', origin); }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
