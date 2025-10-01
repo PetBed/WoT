@@ -14,8 +14,12 @@ const PostBoard = require('./models/Post Board/post');
 // Study App Models
 const StudyUser = require('./models/studyUser');
 const Task = require('./models/task'); // Task model for the study app
-// ADDED: Import the new FlashcardSet model
 const FlashcardSet = require('./models/flashcardSet');
+
+// Collectible Models
+const BaseItem = require('./models/collectible/baseItem');
+const ItemModel = require('./models/collectible/itemModel');
+const CollectedItem = require('./models/collectible/collectedItem');
 
 const app = express();
 mongoose.set('strictQuery', false);
@@ -431,6 +435,11 @@ app.post("/api/study/login", async (req, res) => {
         let needsSave = false;
         if (typeof user.soundLibrary === 'undefined') {
             user.soundLibrary = [];
+            needsSave = true;
+        }
+
+        if (typeof user.inventory === 'undefined') {
+            user.inventory = [];
             needsSave = true;
         }
 
@@ -948,6 +957,116 @@ app.put('/api/study/flashcard-sets/:setId/reorder-cards', async (req, res) => {
         set.flashcards = reorderedFlashcards;
         await set.save();
         res.json(set);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ==========================================
+// ADMIN - COLLECTIBLES API
+// ==========================================
+
+// --- Base Item Management (e.g., "Pencil", "Eraser") ---
+
+// GET all base items
+app.get('/api/admin/base-items', async (req, res) => {
+    try {
+        const items = await BaseItem.find().populate('rarityPools');
+        res.json(items);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST (create) a new base item
+app.post('/api/admin/base-items', async (req, res) => {
+    try {
+        const newBaseItem = new BaseItem(req.body);
+        await newBaseItem.save();
+        res.status(201).json(newBaseItem);
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+// PUT (update) a base item
+app.put('/api/admin/base-items/:id', async (req, res) => {
+    try {
+        const updatedItem = await BaseItem.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+        if (!updatedItem) return res.status(404).json({ error: 'Base item not found.' });
+        res.json(updatedItem);
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+// DELETE a base item
+app.delete('/api/admin/base-items/:id', async (req, res) => {
+    try {
+        // Advanced: You might also want to delete all associated ItemModels here
+        const deletedItem = await BaseItem.findByIdAndDelete(req.params.id);
+        if (!deletedItem) return res.status(404).json({ error: 'Base item not found.' });
+        res.json({ message: 'Base item deleted.' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+
+// --- Item Model Management (e.g., "BIC Pencil") ---
+
+// GET all item models, with optional filtering by base item type
+app.get('/api/admin/item-models', async (req, res) => {
+    try {
+        const filter = req.query.baseItemId ? { baseItemId: req.query.baseItemId } : {};
+        const models = await ItemModel.find(filter).populate('baseItemId');
+        res.json(models);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST (create) a new item model
+app.post('/api/admin/item-models', async (req, res) => {
+    try {
+        const newItemModel = new ItemModel(req.body);
+        await newItemModel.save();
+
+        // Also update the parent BaseItem's rarityPools to include this new model
+        await BaseItem.findByIdAndUpdate(newItemModel.baseItemId, {
+            $push: { [`rarityPools.${newItemModel.rarity}`]: newItemModel._id }
+        });
+
+        res.status(201).json(newItemModel);
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+// PUT (update) an item model
+app.put('/api/admin/item-models/:id', async (req, res) => {
+    try {
+        const updatedModel = await ItemModel.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+        if (!updatedModel) return res.status(404).json({ error: 'Item model not found.' });
+        // Advanced: If rarity changes, you would also need to update the old and new BaseItem rarityPools
+        res.json(updatedModel);
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+// DELETE an item model
+app.delete('/api/admin/item-models/:id', async (req, res) => {
+    try {
+        const deletedModel = await ItemModel.findByIdAndDelete(req.params.id);
+        if (!deletedModel) return res.status(404).json({ error: 'Item model not found.' });
+
+        // Also remove the reference from the parent BaseItem's rarityPools
+        await BaseItem.findByIdAndUpdate(deletedModel.baseItemId, {
+            $pull: { [`rarityPools.${deletedModel.rarity}`]: deletedModel._id }
+        });
+
+        res.json({ message: 'Item model deleted.' });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }

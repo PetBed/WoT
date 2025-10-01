@@ -42,11 +42,16 @@ const studyUserSchema = new mongoose.Schema({
             default: false
         }
     },
-    // EDITED: Added the sound library field to the schema
     soundLibrary: [{
         name: { type: String, required: true },
         url: { type: String, required: true }
+    }],
+    // ADDED: An inventory to store references to the user's collected items.
+    inventory: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'CollectedItem'
     }]
 });
 
 module.exports = mongoose.model('StudyUser', studyUserSchema);
+
