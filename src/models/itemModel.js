@@ -30,6 +30,9 @@ const itemModelSchema = new mongoose.Schema({
         trim: true,
         lowercase: true
     },
+    imageBase64: {
+        type: String 
+    },
     // Possible color options for this item when generated
     colorOptions: {
         type: [String],
@@ -49,3 +52,4 @@ const itemModelSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 module.exports = mongoose.model('ItemModel', itemModelSchema);
+
