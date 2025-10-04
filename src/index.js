@@ -1073,6 +1073,113 @@ app.delete('/api/admin/item-models/:id', async (req, res) => {
     }
 });
 
+app.post('/api/admin/base-items/:baseItemId/batch-models', async (req, res) => {
+    try {
+        const { models } = req.body;
+        const { baseItemId } = req.params;
+
+        if (!models || !Array.isArray(models)) {
+            return res.status(400).json({ error: 'Invalid data format. "models" array is required.' });
+        }
+
+        const baseItem = await BaseItem.findById(baseItemId);
+        if (!baseItem) {
+            return res.status(404).json({ error: 'Base Item not found.' });
+        }
+
+        // Prepare models for insertion, ensuring the correct baseItemId is set
+        const modelsToInsert = models.map(model => ({
+            ...model,
+            baseItemId: baseItemId 
+        }));
+
+        // Insert all new models into the database
+        const createdModels = await ItemModel.insertMany(modelsToInsert, { ordered: false });
+        
+        // Group the new model IDs by rarity to update the parent
+        const rarityGroups = {};
+        createdModels.forEach(model => {
+            if (!rarityGroups[model.rarity]) {
+                rarityGroups[model.rarity] = [];
+            }
+            rarityGroups[model.rarity].push(model._id);
+        });
+
+        // Create the update operation for the parent BaseItem's rarityPools
+        const updateOperation = {};
+        for (const rarity in rarityGroups) {
+            updateOperation[`rarityPools.${rarity}`] = { $each: rarityGroups[rarity] };
+        }
+        
+        await BaseItem.findByIdAndUpdate(baseItemId, {
+            $push: updateOperation
+        });
+
+        res.status(201).json({ message: `${createdModels.length} models imported successfully.` });
+
+    } catch (e) {
+        // Handle potential duplicate key errors from modelId, which is a common import issue
+        if (e.code === 11000) {
+             return res.status(400).json({ error: `Duplicate modelId found. All modelIds must be unique. Details: ${e.message}` });
+        }
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.put('/api/admin/base-items/:baseItemId/batch-models', async (req, res) => {
+    try {
+        const { models } = req.body;
+        const { baseItemId } = req.params;
+
+        if (!models || !Array.isArray(models)) {
+            return res.status(400).json({ error: 'Invalid data format. "models" array is required.' });
+        }
+
+        // 1. Verify Base Item exists
+        const baseItem = await BaseItem.findById(baseItemId);
+        if (!baseItem) {
+            return res.status(404).json({ error: 'Base Item not found.' });
+        }
+
+        // 2. Delete all existing models for this base item
+        await ItemModel.deleteMany({ baseItemId: baseItemId });
+
+        // 3. Prepare and insert new models if any are provided
+        if (models.length > 0) {
+            const modelsToInsert = models.map(model => ({
+                ...model,
+                baseItemId: baseItemId
+            }));
+            const createdModels = await ItemModel.insertMany(modelsToInsert, { ordered: false });
+
+            // 4. Rebuild the rarity pools from scratch
+            const newRarityPools = {};
+            createdModels.forEach(model => {
+                if (!newRarityPools[model.rarity]) {
+                    newRarityPools[model.rarity] = [];
+                }
+                newRarityPools[model.rarity].push(model._id);
+            });
+            baseItem.rarityPools = newRarityPools;
+        } else {
+            // If the text was empty, just clear the pools
+            baseItem.rarityPools = {};
+        }
+
+        // 5. Update the parent BaseItem
+        await baseItem.save();
+
+        res.status(200).json({ message: `${models.length} models set successfully.` });
+
+    } catch (e) {
+        if (e.code === 11000) {
+            return res.status(400).json({ error: `Duplicate modelId found. All modelIds must be unique. Details: ${e.message}` });
+        }
+        res.status(500).json({ error: e.message });
+    }
+});
+
+
 const start = async() => {
   try{
     await mongoose.connect(CONNECTION);
