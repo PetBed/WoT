@@ -418,7 +418,14 @@ app.post("/api/study/register", async (req, res) => {
         await newUser.save();
         res.status(201).json({
             message: "User registered successfully!",
-            user: { id: newUser.id, username: newUser.username, email: newUser.email, settings: newUser.settings },
+            user: { 
+                id: newUser.id, 
+                username: newUser.username, 
+                email: newUser.email, 
+                settings: newUser.settings,
+                accumulatedStudyTime: newUser.accumulatedStudyTime,
+                unclaimedDrops: newUser.unclaimedDrops
+            },
         });
     } catch (e) {
         res.status(500).json({ error: "Server error: " + e.message });
@@ -438,20 +445,32 @@ app.post("/api/study/login", async (req, res) => {
             user.soundLibrary = [];
             needsSave = true;
         }
-
         if (typeof user.inventory === 'undefined') {
             user.inventory = [];
             needsSave = true;
         }
-
-        // Can add other migration checks here in the future
+        if (typeof user.accumulatedStudyTime === 'undefined') {
+            user.accumulatedStudyTime = 0;
+            needsSave = true;
+        }
+        if (typeof user.unclaimedDrops === 'undefined') {
+            user.unclaimedDrops = 0;
+            needsSave = true;
+        }
         if (needsSave) {
             await user.save();
         }
 
         res.status(200).json({
             message: "Login successful!",
-            user: { id: user.id, username: user.username, email: user.email, settings: user.settings },
+            user: { 
+                id: user.id, 
+                username: user.username, 
+                email: user.email, 
+                settings: user.settings,
+                accumulatedStudyTime: user.accumulatedStudyTime,
+                unclaimedDrops: user.unclaimedDrops
+            },
         });
     } catch (e) {
         res.status(500).json({ error: "Server error: " + e.message });
@@ -1179,6 +1198,220 @@ app.put('/api/admin/base-items/:baseItemId/batch-models', async (req, res) => {
     }
 });
 
+// ==========================================
+// COLLECTIBLE CARD GAME API
+// ==========================================
+
+// --- Configuration (can be moved to a separate file later) ---
+const RARITY_TIERS = {
+    common: { weight: 65, value: 1 },
+    uncommon: { weight: 21, value: 3 },
+    rare: { weight: 10, value: 10 },
+    epic: { weight: 3, value: 50 },
+    legendary: { weight: 0.9, value: 250 },
+    mythic: { weight: 0.1, value: 1000 },
+};
+
+const VERSION_CHANCES = {
+    normal: { weight: 93, value: 1 },
+    shiny: { weight: 4, value: 1.5 },
+    inverted: { weight: 2, value: 1.2 },
+    gold: { weight: 1, value: 3 },
+};
+
+const CONDITION_POOL = [
+    { name: 'Damaged', value: 0.5 },
+    { name: 'Worn', value: 0.8 },
+    { name: 'Slightly Used', value: 1.0 },
+    { name: 'New', value: 1.2 },
+];
+
+// Helper function to perform a weighted random selection
+const getWeightedRandom = (options) => {
+    const totalWeight = Object.values(options).reduce((sum, { weight }) => sum + weight, 0);
+    let random = Math.random() * totalWeight;
+    for (const key in options) {
+        if (random < options[key].weight) {
+            return key;
+        }
+        random -= options[key].weight;
+    }
+};
+
+// --- API Routes ---
+
+// PUT (update) a user's study progress and calculate drops
+app.put('/api/study/user/progress', async (req, res) => {
+    try {
+        const { userId, secondsStudied } = req.body;
+        const user = await StudyUser.findById(userId);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        const CARD_DROP_INTERVAL = .3 * 60; // 18 seconds in seconds
+
+        user.accumulatedStudyTime += secondsStudied;
+        
+        let newDrops = 0;
+        while (user.accumulatedStudyTime >= CARD_DROP_INTERVAL) {
+            newDrops++;
+            user.accumulatedStudyTime -= CARD_DROP_INTERVAL;
+        }
+
+        if (newDrops > 0) {
+            user.unclaimedDrops = (user.unclaimedDrops || 0) + newDrops;
+        }
+
+        await user.save();
+        res.json({
+            accumulatedStudyTime: user.accumulatedStudyTime,
+            unclaimedDrops: user.unclaimedDrops,
+        });
+
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+
+// GET 3 generated card choices for a user to claim
+app.get('/api/collectibles/generate-drop', async (req, res) => {
+    try {
+        const choices = [];
+        const allBaseItems = await BaseItem.find();
+        const allItemModels = await ItemModel.find();
+
+        for (let i = 0; i < 3; i++) {
+            const rarity = getWeightedRandom(RARITY_TIERS);
+            const availableModels = allItemModels.filter(m => m.rarity === rarity);
+            if (availableModels.length === 0) { i--; continue; }
+
+            const selectedModel = availableModels[Math.floor(Math.random() * availableModels.length)];
+            
+            const baseItem = allBaseItems.find(b => b._id.equals(selectedModel.baseItemId));
+            if (!baseItem) { i--; continue; } // Safety check
+
+            // --- THIS IS THE FIX ---
+            // Use the model's stat range only if it's a valid array with two numbers. Otherwise, fall back to the base item's default.
+            const weightRange = (selectedModel.modelStats?.weightRange && selectedModel.modelStats.weightRange.length === 2)
+                ? selectedModel.modelStats.weightRange
+                : baseItem.defaultStats.weightRange;
+
+            const priceRange = (selectedModel.modelStats?.priceRange && selectedModel.modelStats.priceRange.length === 2)
+                ? selectedModel.modelStats.priceRange
+                : baseItem.defaultStats.priceRange;
+
+            const aestheticRange = (selectedModel.modelStats?.aestheticRange && selectedModel.modelStats.aestheticRange.length === 2)
+                ? selectedModel.modelStats.aestheticRange
+                : baseItem.defaultStats.aestheticRange;
+            // --- END OF FIX ---
+            
+            const getRandomInRange = (range) => range && range.length === 2 ? Math.random() * (range[1] - range[0]) + range[0] : 0;
+            
+            const version = getWeightedRandom(VERSION_CHANCES);
+            const condition = CONDITION_POOL[Math.floor(Math.random() * CONDITION_POOL.length)];
+            const aestheticScore = Math.round(getRandomInRange(aestheticRange));
+            const price = parseFloat(getRandomInRange(priceRange).toFixed(2));
+            
+            let collectorValue = (RARITY_TIERS[rarity].value * 10) + aestheticScore;
+            collectorValue *= VERSION_CHANCES[version].value;
+            collectorValue *= condition.value;
+            collectorValue += price;
+
+            const cardData = {
+                itemModel: selectedModel,
+                generatedStats: {
+                    rarity,
+                    version,
+                    condition: condition.name,
+                    aestheticScore,
+                    collectorValue: Math.round(collectorValue),
+                    weight: parseFloat(getRandomInRange(weightRange).toFixed(1)),
+                    price,
+                    color: selectedModel.colorOptions[Math.floor(Math.random() * selectedModel.colorOptions.length)] || null,
+                }
+            };
+            choices.push(cardData);
+        }
+        res.json(choices);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+
+// POST (claim) a chosen card and add it to the user's inventory
+app.post('/api/collectibles/claim-card', async (req, res) => {
+    try {
+        const { userId, chosenCard } = req.body;
+        const user = await StudyUser.findById(userId);
+        if (!user || user.unclaimedDrops < 1) {
+            return res.status(400).json({ error: 'No drops to claim.' });
+        }
+
+        // Handle serial number for limited editions
+        const itemModel = await ItemModel.findById(chosenCard.itemModel._id);
+        if (itemModel.limitedEdition.isLimited) {
+            if (itemModel.limitedEdition.mintedCount < itemModel.limitedEdition.maxSerial) {
+                // Atomically increment and get the new count
+                const updatedModel = await ItemModel.findByIdAndUpdate(
+                    itemModel._id,
+                    { $inc: { 'limitedEdition.mintedCount': 1 } },
+                    { new: true }
+                );
+                chosenCard.generatedStats.serialNumber = `${updatedModel.limitedEdition.mintedCount}/${updatedModel.limitedEdition.maxSerial}`;
+            } else {
+                 chosenCard.generatedStats.serialNumber = `SOLD OUT`; // Or handle this case differently
+            }
+        }
+
+        // Create the new collected item document
+        const newCollectedItem = new CollectedItem({
+            ownerId: userId,
+            itemModelId: chosenCard.itemModel._id,
+            generatedStats: chosenCard.generatedStats
+        });
+        await newCollectedItem.save();
+
+        // Update the user's state
+        user.unclaimedDrops -= 1;
+        user.inventory.push(newCollectedItem._id);
+        await user.save();
+
+        res.status(201).json({
+            message: 'Card claimed successfully!',
+            unclaimedDrops: user.unclaimedDrops,
+            newItem: newCollectedItem
+        });
+
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/collectibles/inventory', async (req, res) => {
+    try {
+        const { userId } = req.query;
+        if (!userId) {
+            return res.status(400).json({ error: 'User ID is required.' });
+        }
+        
+        const user = await StudyUser.findById(userId).populate({
+            path: 'inventory', // Populate the 'inventory' array in the StudyUser model
+            populate: {
+                path: 'itemModelId', // Within each inventory item, populate the 'itemModelId' field
+                model: 'ItemModel'   // Tell Mongoose which model to use for this population
+            }
+        });
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found.' });
+        }
+
+        res.json(user.inventory);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
 
 const start = async() => {
   try{

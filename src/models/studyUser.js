@@ -46,8 +46,15 @@ const studyUserSchema = new mongoose.Schema({
         name: { type: String, required: true },
         url: { type: String, required: true }
     }],
-    // ADDED: An inventory to store references to the user's collected items.
-    inventory: [{
+    accumulatedStudyTime: { // Total seconds studied towards the next drop
+        type: Number,
+        default: 0
+    },
+    unclaimedDrops: { // Number of card packs the user can open
+        type: Number,
+        default: 0
+    },
+    inventory: [{ // References to the cards the user has collected
         type: mongoose.Schema.Types.ObjectId,
         ref: 'CollectedItem'
     }]
