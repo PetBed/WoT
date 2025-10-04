@@ -1205,22 +1205,22 @@ app.put('/api/admin/base-items/:baseItemId/batch-models', async (req, res) => {
 // --- Configuration (can be moved to a separate file later) ---
 const RARITY_TIERS = {
     common: { weight: 65, value: 1 },
-    uncommon: { weight: 21, value: 3 },
-    rare: { weight: 10, value: 10 },
-    epic: { weight: 3, value: 50 },
-    legendary: { weight: 0.9, value: 250 },
-    mythic: { weight: 0.1, value: 1000 },
+    uncommon: { weight: 21, value: 2 },
+    rare: { weight: 10, value: 4 },
+    epic: { weight: 3, value: 10 },
+    legendary: { weight: 0.9, value: 15 },
+    mythic: { weight: 0.1, value: 30 },
 };
 
 const VERSION_CHANCES = {
-    normal: { weight: 93, value: 1 },
-    shiny: { weight: 4, value: 1.5 },
-    inverted: { weight: 2, value: 1.2 },
-    gold: { weight: 1, value: 3 },
+    normal: { weight: 94, value: 1 },
+    shiny: { weight: 3, value: 1.3 },
+    inverted: { weight: 2, value: 1.15 },
+    gold: { weight: 1, value: 1.5 },
 };
 
 const CONDITION_POOL = [
-    { name: 'Damaged', value: 0.5 },
+    { name: 'Damaged', value: 0.65 },
     { name: 'Worn', value: 0.8 },
     { name: 'Slightly Used', value: 1.0 },
     { name: 'New', value: 1.2 },
@@ -1247,7 +1247,7 @@ app.put('/api/study/user/progress', async (req, res) => {
         const user = await StudyUser.findById(userId);
         if (!user) return res.status(404).json({ error: 'User not found' });
 
-        const CARD_DROP_INTERVAL = .3 * 60; // 18 seconds in seconds
+        const CARD_DROP_INTERVAL = 20 * 60; // 20 minutes in seconds
 
         user.accumulatedStudyTime += secondsStudied;
         
