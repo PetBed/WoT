@@ -1241,32 +1241,23 @@ const getWeightedRandom = (options) => {
 // --- API Routes ---
 
 // PUT (update) a user's study progress and calculate drops
-app.put('/api/study/user/progress', async (req, res) => {
+app.put('/api/study/user/collectible-state', async (req, res) => {
     try {
-        const { userId, secondsStudied } = req.body;
+        const { userId, accumulatedStudyTime, unclaimedDrops } = req.body;
         const user = await StudyUser.findById(userId);
         if (!user) return res.status(404).json({ error: 'User not found' });
 
-        const CARD_DROP_INTERVAL = 20 * 60; // 20 minutes in seconds
-
-        user.accumulatedStudyTime += secondsStudied;
+        // Directly set the values from the request
+        user.accumulatedStudyTime = accumulatedStudyTime;
+        user.unclaimedDrops = unclaimedDrops;
         
-        let newDrops = 0;
-        while (user.accumulatedStudyTime >= CARD_DROP_INTERVAL) {
-            newDrops++;
-            user.accumulatedStudyTime -= CARD_DROP_INTERVAL;
-        }
-
-        if (newDrops > 0) {
-            user.unclaimedDrops = (user.unclaimedDrops || 0) + newDrops;
-        }
-
         await user.save();
+        
+        // Respond with the saved state to confirm and keep everything in sync
         res.json({
             accumulatedStudyTime: user.accumulatedStudyTime,
             unclaimedDrops: user.unclaimedDrops,
         });
-
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
