@@ -1204,9 +1204,9 @@ app.put('/api/admin/base-items/:baseItemId/batch-models', async (req, res) => {
 
 // --- Configuration (can be moved to a separate file later) ---
 const RARITY_TIERS = {
-    common: { weight: 65, value: 1 },
-    uncommon: { weight: 21, value: 2 },
-    rare: { weight: 10, value: 4 },
+    common: { weight: 72, value: 1 },
+    uncommon: { weight: 16, value: 2 },
+    rare: { weight: 8, value: 4 },
     epic: { weight: 3, value: 10 },
     legendary: { weight: 0.9, value: 15 },
     mythic: { weight: 0.1, value: 30 },
