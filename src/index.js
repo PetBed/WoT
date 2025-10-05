@@ -1241,19 +1241,14 @@ const getWeightedRandom = (options) => {
 // --- API Routes ---
 
 // PUT (update) a user's study progress and calculate drops
-app.put('/api/study/user/collectible-state', async (req, res) => {
+app.get('/api/study/user/collectible-state', async (req, res) => {
     try {
-        const { userId, accumulatedStudyTime, unclaimedDrops } = req.body;
-        const user = await StudyUser.findById(userId);
+        const { userId } = req.query;
+        if (!userId) return res.status(400).json({ error: 'User ID is required.' });
+
+        const user = await StudyUser.findById(userId).select('accumulatedStudyTime unclaimedDrops');
         if (!user) return res.status(404).json({ error: 'User not found' });
 
-        // Directly set the values from the request
-        user.accumulatedStudyTime = accumulatedStudyTime;
-        user.unclaimedDrops = unclaimedDrops;
-        
-        await user.save();
-        
-        // Respond with the saved state to confirm and keep everything in sync
         res.json({
             accumulatedStudyTime: user.accumulatedStudyTime,
             unclaimedDrops: user.unclaimedDrops,
@@ -1263,6 +1258,25 @@ app.put('/api/study/user/collectible-state', async (req, res) => {
     }
 });
 
+app.put('/api/study/user/collectible-state', async (req, res) => {
+    try {
+        const { userId, accumulatedStudyTime, unclaimedDrops } = req.body;
+        const user = await StudyUser.findById(userId);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        user.accumulatedStudyTime = accumulatedStudyTime;
+        user.unclaimedDrops = unclaimedDrops;
+        
+        await user.save();
+        
+        res.json({
+            accumulatedStudyTime: user.accumulatedStudyTime,
+            unclaimedDrops: user.unclaimedDrops,
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
 
 // GET 3 generated card choices for a user to claim
 app.get('/api/collectibles/generate-drop', async (req, res) => {
