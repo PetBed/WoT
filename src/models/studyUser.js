@@ -57,7 +57,11 @@ const studyUserSchema = new mongoose.Schema({
     inventory: [{ // References to the cards the user has collected
         type: mongoose.Schema.Types.ObjectId,
         ref: 'CollectedItem'
-    }]
+    }],
+    pendingDrops: {
+        type: Array,
+        default: []
+    }
 });
 
 module.exports = mongoose.model('StudyUser', studyUserSchema);

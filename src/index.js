@@ -21,6 +21,10 @@ const BaseItem = require('./models/collectible/baseItem');
 const ItemModel = require('./models/collectible/itemModel');
 const CollectedItem = require('./models/collectible/collectedItem');
 
+// Flood System Model
+const FloodData = require('./models/flood/floodData');
+const SystemState = require('./models/flood/systemState');
+
 const app = express();
 mongoose.set('strictQuery', false);
 
@@ -30,7 +34,7 @@ app.use(express.urlencoded({ extended: true }));
 // CORRECTED CORS MIDDLEWARE
 app.use((req, res, next) => {
   // --- DEBUG LOG: Log all incoming requests ---
-  console.log(`[BACKEND] Incoming Request: ${req.method} ${req.originalUrl}`);
+  // console.log(`[BACKEND] Incoming Request: ${req.method} ${req.originalUrl}`);
 	
   const allowedOrigins = [ 'http://127.0.0.1:5500', 'https://petbed.github.io', 'http://127.0.0.1:5501', 'http://127.0.0.1:5500/index.html', 'https://fcgh4w.csb.app', 'http://127.0.0.1:5501/Study%20Website/admin.html', 'https://petbed.github.io/Study%20Website/admin.html'
   ];
@@ -391,6 +395,93 @@ async function fetchSDGNewsFirstPages(n) {
 }
 
 //=======================================================
+// Flood System API
+//=======================================================
+app.post('/api/flood-data', async (req, res) => {
+    try {
+        const newData = new FloodData(req.body);
+        await newData.save();
+        
+        // After saving, find the current system state to send back to the ESP32
+        let state = await SystemState.findOne();
+        if (!state) {
+            // If no state exists, create a default one
+            state = new SystemState();
+            await state.save();
+        }
+        
+        res.status(201).json(state);
+
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Endpoint for the dashboard to get the latest data and control states
+app.get('/api/flood-data/latest', async (req, res) => {
+    try {
+        const latestData = await FloodData.findOne().sort({ timestamp: -1 });
+        if (!latestData) {
+            return res.status(404).json({ message: 'No flood data found yet.' });
+        }
+
+        const systemState = await SystemState.findOne();
+
+        const responseData = latestData.toObject();
+        
+        // Send the boolean states for the toggles to be set correctly on the dashboard
+        responseData.remoteLedIsOn = systemState ? systemState.remoteLedIsOn : false;
+        responseData.emergencyIsActive = systemState ? systemState.emergencyIsActive : false;
+
+        res.json(responseData);
+
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+
+// Endpoints for dashboard controls with new priority logic
+app.post('/api/controls/:command', async (req, res) => {
+    const { command } = req.params;
+    
+    try {
+        let currentState = await SystemState.findOne();
+        if (!currentState) {
+            currentState = new SystemState();
+        }
+
+        // 1. Toggle the appropriate boolean state based on the command
+        if (command === 'led') {
+            currentState.remoteLedIsOn = !currentState.remoteLedIsOn;
+        } else if (command === 'emergency') {
+            currentState.emergencyIsActive = !currentState.emergencyIsActive;
+        } else if (command === 'silence') {
+            currentState.lastCommand = 'SILENCE_ALARM';
+        } else {
+            return res.status(400).json({ message: 'Invalid command.' });
+        }
+
+        // 2. Recalculate the final remoteLedState based on priority
+        if (currentState.emergencyIsActive) {
+            currentState.remoteLedState = 'EMERGENCY';
+        } else if (currentState.remoteLedIsOn) {
+            currentState.remoteLedState = 'ON';
+        } else {
+            currentState.remoteLedState = 'OFF';
+        }
+        
+        // 3. Save the updated state and respond
+        const updatedState = await currentState.save();
+        res.json(updatedState);
+
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+
+//=======================================================
 // Study Dashboard User API
 //=======================================================
 app.post("/api/study/register", async (req, res) => {
@@ -457,6 +548,9 @@ app.post("/api/study/login", async (req, res) => {
             user.unclaimedDrops = 0;
             needsSave = true;
         }
+
+        if (typeof user.pendingDrops === 'undefined') { user.pendingDrops = []; needsSave = true; }
+
         if (needsSave) {
             await user.save();
         }
@@ -1246,12 +1340,66 @@ app.get('/api/study/user/collectible-state', async (req, res) => {
         const { userId } = req.query;
         if (!userId) return res.status(400).json({ error: 'User ID is required.' });
 
-        const user = await StudyUser.findById(userId).select('accumulatedStudyTime unclaimedDrops');
+        var user = await StudyUser.findById(userId);
         if (!user) return res.status(404).json({ error: 'User not found' });
 
+        // AUTO-MIGRATION: Define default values for all fields
+        const defaultValues = {
+            accumulatedStudyTime: 0,
+            unclaimedDrops: 0,
+            inventory: [],
+            pendingDrops: [],
+            soundLibrary: [],
+            settings: {
+                darkMode: false
+            },
+            studyLogs: new Map(),
+            studyStreak: 0,
+            lastStudyDay: ''
+        };
+
+        // Check and add missing fields with defaults
+        let needsSave = false;
+
+        // Check each field and set defaults if undefined
+        for (const [field, defaultValue] of Object.entries(defaultValues)) {
+            if (user[field] === undefined) {
+                user[field] = defaultValue;
+                needsSave = true;
+                console.log(`Migration: Added missing field "${field}" for user ${userId}`);
+            }
+        }
+
+        // Special handling for nested objects like settings
+        if (!user.settings) {
+            user.settings = defaultValues.settings;
+            needsSave = true;
+        } else if (user.settings.darkMode === undefined) {
+            user.settings.darkMode = false;
+            needsSave = true;
+        }       
+        
+        // Save to database if any fields were added
+        try {
+        if (needsSave) {
+          await user.save();
+          console.log(`Migration: Saved updated fields for user ${userId}`);
+        }
+        } catch (saveError) {
+          console.error(`Failed to save user ${userId} after migration:`, saveError);
+          return res.status(500).json({ error: "Failed to save user after migration", details: saveError.message });
+        }
+        
         res.json({
-            accumulatedStudyTime: user.accumulatedStudyTime,
-            unclaimedDrops: user.unclaimedDrops,
+            accumulatedStudyTime: user.accumulatedStudyTime || 0,
+            unclaimedDrops: user.unclaimedDrops || 0,
+            inventory: user.inventory || [],
+            pendingDrops: user.pendingDrops || [],
+            soundLibrary: user.soundLibrary || [],
+            settings: user.settings || defaultValues.settings,
+            studyLogs: user.studyLogs || new Map(),
+            studyStreak: user.studyStreak || 0,
+            lastStudyDay: user.lastStudyDay || ''
         });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -1260,75 +1408,71 @@ app.get('/api/study/user/collectible-state', async (req, res) => {
 
 app.put('/api/study/user/collectible-state', async (req, res) => {
     try {
-        const { userId, accumulatedStudyTime, unclaimedDrops } = req.body;
-        const user = await StudyUser.findById(userId);
-        if (!user) return res.status(404).json({ error: 'User not found' });
+        const { userId } = req.query;
+        
+        if (!userId) {
+            return res.status(400).json({ error: 'User ID is required' });
+        }
 
-        user.accumulatedStudyTime = accumulatedStudyTime;
-        user.unclaimedDrops = unclaimedDrops;
+        const user = await StudyUser.findById(userId);
         
-        await user.save();
-        
-        res.json({
-            accumulatedStudyTime: user.accumulatedStudyTime,
-            unclaimedDrops: user.unclaimedDrops,
-        });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+    } catch (error) {
+        console.error('Error in collectible-state sync:', error);
+        res.status(500).json({ error: 'Failed to sync user state' });
     }
 });
 
 // GET 3 generated card choices for a user to claim
-app.get('/api/collectibles/generate-drop', async (req, res) => {
+app.post('/api/collectibles/generate-drop', async (req, res) => {
     try {
+        const { userId } = req.query;
+        const user = await StudyUser.findById(userId);
+        console.log(`[BACKEND] Generating drop for user ${userId}`);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+        if (user.unclaimedDrops < 1) return res.status(400).json({ error: 'No drops to claim.' });
+        console.log(`[BACKEND] User ${userId} has ${user.pendingDrops} pending drops.`);
+        // --- THIS IS THE FIX ---
+        // 1. If choices have already been generated and saved, return them.
+        if (user.pendingDrops && user.pendingDrops.length > 0) {
+            console.log(`[BACKEND] Returning pre-existing card choices for user ${userId}.`);
+            // We only show one set of choices at a time.
+            return res.json(user.pendingDrops[0]);
+        }
+
+        // 2. If no choices exist, generate and save them.
+        console.log(`[BACKEND] Generating new card choices for user ${userId}.`);
         const choices = [];
         const allBaseItems = await BaseItem.find();
         const allItemModels = await ItemModel.find();
 
         for (let i = 0; i < 3; i++) {
+            // ... (The existing card generation logic is placed here and remains unchanged)
             const rarity = getWeightedRandom(RARITY_TIERS);
             const availableModels = allItemModels.filter(m => m.rarity === rarity);
             if (availableModels.length === 0) { i--; continue; }
-
             const selectedModel = availableModels[Math.floor(Math.random() * availableModels.length)];
-            
             const baseItem = allBaseItems.find(b => b._id.equals(selectedModel.baseItemId));
-            if (!baseItem) { i--; continue; } // Safety check
-
-            // --- THIS IS THE FIX ---
-            // Use the model's stat range only if it's a valid array with two numbers. Otherwise, fall back to the base item's default.
-            const weightRange = (selectedModel.modelStats?.weightRange && selectedModel.modelStats.weightRange.length === 2)
-                ? selectedModel.modelStats.weightRange
-                : baseItem.defaultStats.weightRange;
-
-            const priceRange = (selectedModel.modelStats?.priceRange && selectedModel.modelStats.priceRange.length === 2)
-                ? selectedModel.modelStats.priceRange
-                : baseItem.defaultStats.priceRange;
-
-            const aestheticRange = (selectedModel.modelStats?.aestheticRange && selectedModel.modelStats.aestheticRange.length === 2)
-                ? selectedModel.modelStats.aestheticRange
-                : baseItem.defaultStats.aestheticRange;
-            // --- END OF FIX ---
-            
+            if (!baseItem) { i--; continue; }
+            const weightRange = (selectedModel.modelStats?.weightRange && selectedModel.modelStats.weightRange.length === 2) ? selectedModel.modelStats.weightRange : baseItem.defaultStats.weightRange;
+            const priceRange = (selectedModel.modelStats?.priceRange && selectedModel.modelStats.priceRange.length === 2) ? selectedModel.modelStats.priceRange : baseItem.defaultStats.priceRange;
+            const aestheticRange = (selectedModel.modelStats?.aestheticRange && selectedModel.modelStats.aestheticRange.length === 2) ? selectedModel.modelStats.aestheticRange : baseItem.defaultStats.aestheticRange;
             const getRandomInRange = (range) => range && range.length === 2 ? Math.random() * (range[1] - range[0]) + range[0] : 0;
-            
             const version = getWeightedRandom(VERSION_CHANCES);
             const condition = CONDITION_POOL[Math.floor(Math.random() * CONDITION_POOL.length)];
             const aestheticScore = Math.round(getRandomInRange(aestheticRange));
             const price = parseFloat(getRandomInRange(priceRange).toFixed(2));
-            
             let collectorValue = (RARITY_TIERS[rarity].value * 10) + aestheticScore;
             collectorValue *= VERSION_CHANCES[version].value;
             collectorValue *= condition.value;
             collectorValue += price;
-
             const cardData = {
-                itemModel: selectedModel,
+                itemModel: selectedModel.toObject(), // Convert to plain object for storage
                 generatedStats: {
-                    rarity,
-                    version,
-                    condition: condition.name,
-                    aestheticScore,
+                    rarity, version, condition: condition.name, aestheticScore,
                     collectorValue: Math.round(collectorValue),
                     weight: parseFloat(getRandomInRange(weightRange).toFixed(1)),
                     price,
@@ -1337,7 +1481,14 @@ app.get('/api/collectibles/generate-drop', async (req, res) => {
             };
             choices.push(cardData);
         }
+        
+        // 3. Save the newly generated choices to the user's profile.
+        user.pendingDrops.push(choices);
+        await user.save();
+
         res.json(choices);
+        // --- END OF FIX ---
+
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -1349,7 +1500,9 @@ app.post('/api/collectibles/claim-card', async (req, res) => {
     try {
         const { userId, chosenCard } = req.body;
         const user = await StudyUser.findById(userId);
-        if (!user || user.unclaimedDrops < 1) {
+
+        // More robust check
+        if (!user || user.unclaimedDrops < 1 || !user.pendingDrops || user.pendingDrops.length === 0) {
             return res.status(400).json({ error: 'No drops to claim.' });
         }
 
@@ -1357,7 +1510,6 @@ app.post('/api/collectibles/claim-card', async (req, res) => {
         const itemModel = await ItemModel.findById(chosenCard.itemModel._id);
         if (itemModel.limitedEdition.isLimited) {
             if (itemModel.limitedEdition.mintedCount < itemModel.limitedEdition.maxSerial) {
-                // Atomically increment and get the new count
                 const updatedModel = await ItemModel.findByIdAndUpdate(
                     itemModel._id,
                     { $inc: { 'limitedEdition.mintedCount': 1 } },
@@ -1365,11 +1517,10 @@ app.post('/api/collectibles/claim-card', async (req, res) => {
                 );
                 chosenCard.generatedStats.serialNumber = `${updatedModel.limitedEdition.mintedCount}/${updatedModel.limitedEdition.maxSerial}`;
             } else {
-                 chosenCard.generatedStats.serialNumber = `SOLD OUT`; // Or handle this case differently
+                 chosenCard.generatedStats.serialNumber = `SOLD OUT`;
             }
         }
 
-        // Create the new collected item document
         const newCollectedItem = new CollectedItem({
             ownerId: userId,
             itemModelId: chosenCard.itemModel._id,
@@ -1377,9 +1528,12 @@ app.post('/api/collectibles/claim-card', async (req, res) => {
         });
         await newCollectedItem.save();
 
-        // Update the user's state
         user.unclaimedDrops -= 1;
         user.inventory.push(newCollectedItem._id);
+        // --- THIS IS THE FIX ---
+        // Remove the set of choices that was just used.
+        user.pendingDrops.shift(); 
+        // --- END OF FIX ---
         await user.save();
 
         res.status(201).json({
