@@ -25,6 +25,9 @@ const CollectedItem = require('./models/collectible/collectedItem');
 const FloodData = require('./models/flood/floodData');
 const SystemState = require('./models/flood/systemState');
 
+// Clock Model
+const ClockDevice = require('./models/clockDevice');
+
 const app = express();
 mongoose.set('strictQuery', false);
 
@@ -485,6 +488,160 @@ app.post('/api/controls/:command', async (req, res) => {
     }
 });
 
+//=======================================================
+// Clock Device API
+//=======================================================
+
+// GET clock settings by device ID
+app.get('/api/clock/settings/:deviceId', async (req, res) => {
+  try {
+    const { deviceId } = req.params;
+    
+    let device = await ClockDevice.findOne({ deviceId });
+    
+    // If device doesn't exist, create it with defaults
+    if (!device) {
+      device = new ClockDevice({ deviceId });
+      await device.save();
+      console.log(`[CLOCK] New device registered: ${deviceId}`);
+    }
+    
+    // Update last seen timestamp
+    device.lastSeen = new Date();
+    await device.save();
+    
+    res.json({
+      success: true,
+      settings: {
+        alarmHour: device.alarmSettings.hour,
+        alarmMinute: device.alarmSettings.minute,
+        alarmEnabled: device.alarmSettings.enabled,
+        city: device.location.city,
+        matrixIntensity: device.displaySettings.matrixIntensity
+      }
+    });
+  } catch (e) {
+    console.error('[CLOCK] Error fetching settings:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// POST/PUT update alarm settings
+app.put('/api/clock/settings/:deviceId/alarm', async (req, res) => {
+  try {
+    const { deviceId } = req.params;
+    const { hour, minute, enabled } = req.body;
+    
+    // Validate inputs
+    if (hour !== undefined && (hour < 0 || hour > 23)) {
+      return res.status(400).json({ success: false, error: 'Hour must be between 0-23' });
+    }
+    if (minute !== undefined && (minute < 0 || minute > 59)) {
+      return res.status(400).json({ success: false, error: 'Minute must be between 0-59' });
+    }
+    
+    let device = await ClockDevice.findOne({ deviceId });
+    
+    if (!device) {
+      device = new ClockDevice({ deviceId });
+    }
+    
+    // Update only provided fields
+    if (hour !== undefined) device.alarmSettings.hour = hour;
+    if (minute !== undefined) device.alarmSettings.minute = minute;
+    if (enabled !== undefined) device.alarmSettings.enabled = enabled;
+    
+    device.lastSeen = new Date();
+    await device.save();
+    
+    console.log(`[CLOCK] Alarm updated for ${deviceId}: ${device.alarmSettings.hour}:${device.alarmSettings.minute} (${device.alarmSettings.enabled ? 'ON' : 'OFF'})`);
+    
+    res.json({
+      success: true,
+      message: 'Alarm settings updated',
+      settings: {
+        alarmHour: device.alarmSettings.hour,
+        alarmMinute: device.alarmSettings.minute,
+        alarmEnabled: device.alarmSettings.enabled
+      }
+    });
+  } catch (e) {
+    console.error('[CLOCK] Error updating alarm:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// POST update city/location
+app.put('/api/clock/settings/:deviceId/location', async (req, res) => {
+  try {
+    const { deviceId } = req.params;
+    const { city } = req.body;
+    
+    if (!city || city.trim() === '') {
+      return res.status(400).json({ success: false, error: 'City name is required' });
+    }
+    
+    let device = await ClockDevice.findOne({ deviceId });
+    
+    if (!device) {
+      device = new ClockDevice({ deviceId });
+    }
+    
+    device.location.city = city;
+    device.lastSeen = new Date();
+    await device.save();
+    
+    console.log(`[CLOCK] Location updated for ${deviceId}: ${city}`);
+    
+    res.json({
+      success: true,
+      message: 'Location updated',
+      city: device.location.city
+    });
+  } catch (e) {
+    console.error('[CLOCK] Error updating location:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// GET all registered clock devices (for admin dashboard)
+app.get('/api/clock/devices', async (req, res) => {
+  try {
+    const devices = await ClockDevice.find().sort({ lastSeen: -1 });
+    res.json({
+      success: true,
+      count: devices.length,
+      devices: devices.map(d => ({
+        deviceId: d.deviceId,
+        deviceName: d.deviceName,
+        lastSeen: d.lastSeen,
+        alarmEnabled: d.alarmSettings.enabled,
+        city: d.location.city
+      }))
+    });
+  } catch (e) {
+    console.error('[CLOCK] Error fetching devices:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// DELETE a clock device
+app.delete('/api/clock/settings/:deviceId', async (req, res) => {
+  try {
+    const { deviceId } = req.params;
+    const result = await ClockDevice.deleteOne({ deviceId });
+    
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ success: false, error: 'Device not found' });
+    }
+    
+    console.log(`[CLOCK] Device deleted: ${deviceId}`);
+    res.json({ success: true, message: 'Device deleted' });
+  } catch (e) {
+    console.error('[CLOCK] Error deleting device:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
 
 //=======================================================
 // Study Dashboard User API

@@ -1,0 +1,66 @@
+const mongoose = require('mongoose');
+
+const clockDeviceSchema = new mongoose.Schema({
+  deviceId: {
+    type: String,
+    required: true,
+    unique: true,
+    index: true
+  },
+  deviceName: {
+    type: String,
+    default: 'My Clock'
+  },
+  alarmSettings: {
+    hour: {
+      type: Number,
+      default: 7,
+      min: 0,
+      max: 23
+    },
+    minute: {
+      type: Number,
+      default: 30,
+      min: 0,
+      max: 59
+    },
+    enabled: {
+      type: Boolean,
+      default: true
+    }
+  },
+  location: {
+    city: {
+      type: String,
+      default: 'Bintulu'
+    },
+    timezone: {
+      type: String,
+      default: 'GMT+8'
+    }
+  },
+  displaySettings: {
+    matrixIntensity: {
+      type: Number,
+      default: 2,
+      min: 0,
+      max: 15
+    },
+    oledAutoDim: {
+      type: Boolean,
+      default: true
+    }
+  },
+  lastSeen: {
+    type: Date,
+    default: Date.now
+  },
+  firmwareVersion: {
+    type: String,
+    default: 'v0.3.0'
+  }
+}, {
+  timestamps: true
+});
+
+module.exports = mongoose.model('ClockDevice', clockDeviceSchema);
