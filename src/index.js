@@ -28,6 +28,9 @@ const SystemState = require('./models/flood/systemState');
 // Clock Model
 const ClockDevice = require('./models/clockDevice');
 
+// Timeline Model
+const Timeline = require('./models/timeline'); 
+
 const app = express();
 mongoose.set('strictQuery', false);
 
@@ -39,7 +42,7 @@ app.use((req, res, next) => {
   // --- DEBUG LOG: Log all incoming requests ---
   console.log(`[BACKEND] Incoming Request: ${req.method} ${req.originalUrl}`);
 	res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
@@ -1731,6 +1734,219 @@ app.get('/api/collectibles/inventory', async (req, res) => {
         res.json(user.inventory);
     } catch (e) {
         res.status(500).json({ error: e.message });
+    }
+});
+
+//=======================================================
+// Timeline API
+//=======================================================
+
+// POST: Create a new timeline
+app.post("/api/study/timelines", async (req, res) => {
+    const { name, description, userId } = req.body;
+    
+    if (!name || !userId) {
+        return res.status(400).json({ error: "Timeline name and User ID are required." });
+    }
+
+    try {
+        const user = await StudyUser.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: "User not found." });
+        }
+
+        const newTimeline = new Timeline({
+            name,
+            description: description || '',
+            userId
+        });
+
+        await newTimeline.save();
+        res.status(201).json({
+            message: "Timeline created successfully!",
+            timeline: newTimeline
+        });
+
+    } catch (e) {
+        console.error("[BACKEND] Error creating timeline:", e);
+        res.status(500).json({ error: "Server error: " + e.message });
+    }
+});
+
+// GET: Retrieve all timelines for a specific user
+app.get("/api/study/timelines", async (req, res) => {
+    const { userId } = req.query;
+
+    if (!userId) {
+        return res.status(400).json({ error: "User ID is required." });
+    }
+
+    try {
+        // Fetch timelines and sort by creation date (newest first)
+        const timelines = await Timeline.find({ userId }).sort({ createdAt: -1 });
+        res.json({ timelines });
+    } catch (e) {
+        res.status(500).json({ error: "Server error: " + e.message });
+    }
+});
+
+// GET: Retrieve a single timeline by ID
+app.get("/api/study/timelines/:id", async (req, res) => {
+    try {
+        // Find by ID, and sort the events by date (oldest first)
+        const timeline = await Timeline.findById(req.params.id);
+        
+        if (!timeline) {
+            return res.status(404).json({ error: "Timeline not found." });
+        }
+
+        // Manually sort events in memory since we used a subdocument array
+        timeline.events.sort((a, b) => a.date - b.date);
+
+        res.json({ timeline });
+    } catch (e) {
+        res.status(500).json({ error: "Server error: " + e.message });
+    }
+});
+
+// DELETE: Delete a timeline
+app.delete("/api/study/timelines/:id", async (req, res) => {
+    try {
+        const result = await Timeline.findByIdAndDelete(req.params.id);
+        
+        if (!result) {
+            return res.status(404).json({ error: "Timeline not found." });
+        }
+        res.status(200).json({ message: "Timeline deleted successfully." });
+    } catch (e) {
+        res.status(500).json({ error: "Server error: " + e.message });
+    }
+});
+
+app.patch("/api/study/timelines/:timelineId", async (req, res) => {
+    const { name, description } = req.body;
+    
+    // Check if at least one field is provided
+    if (name === undefined && description === undefined) {
+        return res.status(400).json({ error: "At least 'name' or 'description' must be provided for update." });
+    }
+
+    try {
+        const timeline = await Timeline.findById(req.params.timelineId);
+        if (!timeline) {
+            return res.status(404).json({ error: "Timeline not found." });
+        }
+
+        if (name !== undefined) {
+            timeline.name = name;
+        }
+
+        // Allow description to be updated to an empty string if provided
+        if (description !== undefined) {
+            timeline.description = description;
+        }
+
+        await timeline.save();
+
+        res.status(200).json({
+            message: "Timeline details updated successfully!",
+            timeline
+        });
+
+    } catch (e) {
+        res.status(500).json({ error: "Server error: " + e.message });
+    }
+});
+
+//=======================================================
+// Event CRUD API
+//=======================================================
+
+// POST: Add a new event to a specific timeline
+app.post("/api/study/timelines/:timelineId/events", async (req, res) => {
+    const { date, title, details } = req.body;
+    
+    if (!date || !title) {
+        return res.status(400).json({ error: "Event date and title are required." });
+    }
+
+    try {
+        const timeline = await Timeline.findById(req.params.timelineId);
+        if (!timeline) {
+            return res.status(404).json({ error: "Timeline not found." });
+        }
+
+        const newEvent = {
+            date: new Date(date),
+            title,
+            details: details || ''
+        };
+
+        timeline.events.push(newEvent);
+        await timeline.save();
+
+        // Return the newly added event (which Mongoose assigns an _id to)
+        const createdEvent = timeline.events[timeline.events.length - 1]; 
+
+        res.status(201).json({
+            message: "Event added successfully!",
+            event: createdEvent
+        });
+
+    } catch (e) {
+        console.error("[BACKEND] Error adding event:", e);
+        res.status(500).json({ error: "Server error: " + e.message });
+    }
+});
+
+// PUT/PATCH: Update an event in a specific timeline
+app.patch("/api/study/timelines/:timelineId/events/:eventId", async (req, res) => {
+    const { date, title, details } = req.body;
+    console.log("test")
+    try {
+        const timeline = await Timeline.findById(req.params.timelineId);
+        if (!timeline) {
+            return res.status(404).json({ error: "Timeline not found." });
+        }
+
+        const event = timeline.events.id(req.params.eventId);
+        if (!event) {
+            return res.status(404).json({ error: "Event not found." });
+        }
+
+        // Update fields if they are provided in the request body
+        if (date) event.date = new Date(date);
+        if (title) event.title = title;
+        if (details !== undefined) event.details = details; // Allow empty string for details
+
+        await timeline.save();
+
+        res.status(200).json({
+            message: "Event updated successfully!",
+            event
+        });
+
+    } catch (e) {
+        res.status(500).json({ error: "Server error: " + e.message });
+    }
+});
+
+// DELETE: Delete an event from a specific timeline
+app.delete("/api/study/timelines/:timelineId/events/:eventId", async (req, res) => {
+    try {
+        const timeline = await Timeline.findById(req.params.timelineId);
+        if (!timeline) {
+            return res.status(404).json({ error: "Timeline not found." });
+        }
+
+        // Remove the event using Mongoose's subdocument array method
+        timeline.events.pull(req.params.eventId);
+        await timeline.save();
+
+        res.status(200).json({ message: "Event deleted successfully." });
+
+    } catch (e) {
+        res.status(500).json({ error: "Server error: " + e.message });
     }
 });
 
