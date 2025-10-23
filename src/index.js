@@ -1861,63 +1861,90 @@ app.patch("/api/study/timelines/:timelineId", async (req, res) => {
 //=======================================================
 // Event CRUD API
 //=======================================================
-
-// POST: Add a new event to a specific timeline
+// POST: Add an event to a specific timeline
+// *** UPDATED to handle startDate and endDate ***
 app.post("/api/study/timelines/:timelineId/events", async (req, res) => {
-    const { date, title, details } = req.body;
-    
-    if (!date || !title) {
-        return res.status(400).json({ error: "Event date and title are required." });
-    }
-
     try {
+        // UPDATED: Destructure new fields
+        const { title, details, startDate, endDate } = req.body;
+
+        // UPDATED: Validate new fields
+        if (!title || !startDate) {
+            return res.status(400).json({ error: "Title and Start Date are required." });
+        }
+        
+        if (endDate && new Date(endDate) < new Date(startDate)) {
+             return res.status(400).json({ error: "End Date cannot be before Start Date." });
+        }
+
         const timeline = await Timeline.findById(req.params.timelineId);
         if (!timeline) {
             return res.status(404).json({ error: "Timeline not found." });
         }
 
+        // UPDATED: Create new event object
         const newEvent = {
-            date: new Date(date),
             title,
-            details: details || ''
+            details: details || '',
+            startDate: new Date(startDate),
+            // Set endDate only if it's provided, otherwise it defaults to null (from schema)
+            endDate: endDate ? new Date(endDate) : null 
         };
 
         timeline.events.push(newEvent);
         await timeline.save();
-
-        // Return the newly added event (which Mongoose assigns an _id to)
-        const createdEvent = timeline.events[timeline.events.length - 1]; 
+        
+        // Get the newly created event (it's the last one in the array)
+        const addedEvent = timeline.events[timeline.events.length - 1];
 
         res.status(201).json({
             message: "Event added successfully!",
-            event: createdEvent
+            event: addedEvent 
         });
 
     } catch (e) {
-        console.error("[BACKEND] Error adding event:", e);
         res.status(500).json({ error: "Server error: " + e.message });
     }
 });
 
-// PUT/PATCH: Update an event in a specific timeline
-app.patch("/api/study/timelines/:timelineId/events/:eventId", async (req, res) => {
-    const { date, title, details } = req.body;
-    console.log("test")
+// PUT: Update an event in a specific timeline
+// *** UPDATED to handle startDate, endDate, and migration ***
+app.put("/api/study/timelines/:timelineId/events/:eventId", async (req, res) => {
     try {
+        // UPDATED: Destructure new fields
+        const { title, details, startDate, endDate } = req.body;
+        
+        if (endDate && startDate && new Date(endDate) < new Date(startDate)) {
+             return res.status(400).json({ error: "End Date cannot be before Start Date." });
+        }
+
         const timeline = await Timeline.findById(req.params.timelineId);
         if (!timeline) {
             return res.status(404).json({ error: "Timeline not found." });
         }
-
+        
         const event = timeline.events.id(req.params.eventId);
         if (!event) {
             return res.status(404).json({ error: "Event not found." });
         }
 
-        // Update fields if they are provided in the request body
-        if (date) event.date = new Date(date);
+        // UPDATED: Update fields if they are provided
+        if (startDate) event.startDate = new Date(startDate);
         if (title) event.title = title;
-        if (details !== undefined) event.details = details; // Allow empty string for details
+        if (details !== undefined) event.details = details;
+        
+        // UPDATED: Handle endDate (add, change, or remove)
+        // Check for explicit null to allow removing an end date
+        if (endDate === null) {
+            event.endDate = null;
+        } else if (endDate) {
+            event.endDate = new Date(endDate);
+        }
+
+        // MIGRATION: If the old 'date' field exists, remove it
+        if (event.date) {
+            event.date = undefined;
+        }
 
         await timeline.save();
 
@@ -1932,6 +1959,7 @@ app.patch("/api/study/timelines/:timelineId/events/:eventId", async (req, res) =
 });
 
 // DELETE: Delete an event from a specific timeline
+// (This endpoint remains unchanged)
 app.delete("/api/study/timelines/:timelineId/events/:eventId", async (req, res) => {
     try {
         const timeline = await Timeline.findById(req.params.timelineId);
@@ -1939,8 +1967,13 @@ app.delete("/api/study/timelines/:timelineId/events/:eventId", async (req, res) 
             return res.status(404).json({ error: "Timeline not found." });
         }
 
-        // Remove the event using Mongoose's subdocument array method
-        timeline.events.pull(req.params.eventId);
+        // Find the event and remove it
+        const event = timeline.events.id(req.params.eventId);
+        if (!event) {
+             return res.status(404).json({ error: "Event not found." });
+        }
+        event.deleteOne(); // Use deleteOne on the subdocument
+        
         await timeline.save();
 
         res.status(200).json({ message: "Event deleted successfully." });

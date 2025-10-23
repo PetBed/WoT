@@ -2,11 +2,24 @@ const mongoose = require('mongoose');
 
 // 1. Define the schema for a single event
 const eventSchema = new mongoose.Schema({
+    // --- UPDATED FOR PERIODS ---
+    // 'date' is kept for legacy data (migration)
     date: {
         type: Date,
-        required: true,
-        // Using Date type allows easy sorting later
     },
+    // 'startDate' is the new standard.
+    // We'll enforce requirement at the API level
+    // to allow for seamless migration.
+    startDate: {
+        type: Date
+    },
+    // 'endDate' is new and optional
+    endDate: {
+        type: Date,
+        default: null
+    },
+    // --- END UPDATE ---
+    
     title: {
         type: String,
         required: true,
