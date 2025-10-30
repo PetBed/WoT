@@ -31,6 +31,8 @@ const ClockDevice = require('./models/clockDevice');
 // Timeline Model
 const Timeline = require('./models/timeline'); 
 
+const EtymologyWord = require('./models/etymologyWord');
+
 const app = express();
 mongoose.set('strictQuery', false);
 
@@ -1980,6 +1982,106 @@ app.delete("/api/study/timelines/:timelineId/events/:eventId", async (req, res) 
 
     } catch (e) {
         res.status(500).json({ error: "Server error: " + e.message });
+    }
+});
+
+//=======================================================
+// Etymology Word Log API
+//=======================================================
+
+// POST: Create a new word entry
+app.post("/api/study/etymology-log", async (req, res) => {
+    try {
+        const { userId, word } = req.body;
+        if (!userId || !word) {
+            return res.status(400).json({ error: "User ID and Word are required." });
+        }
+        
+        // Check for duplicate
+        const existingWord = await EtymologyWord.findOne({ userId, word });
+        if (existingWord) {
+            return res.status(400).json({ error: "You have already logged this word." });
+        }
+
+        const newWord = new EtymologyWord(req.body);
+        await newWord.save();
+        res.status(201).json(newWord);
+    } catch (e) {
+        // Handle other errors, e.g., validation
+        res.status(400).json({ error: e.message });
+    }
+});
+
+// GET: Get all word entries for a user
+app.get("/api/study/etymology-log", async (req, res) => {
+    try {
+        const { userId } = req.query;
+        if (!userId) {
+            return res.status(400).json({ error: "User ID is required." });
+        }
+        
+        // Find all words for the user, sort alphabetically by the 'word' field
+        const words = await EtymologyWord.find({ userId }).sort({ word: 1 });
+        res.json(words);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// GET: Get a single word entry by its ID
+app.get("/api/study/etymology-log/:id", async (req, res) => {
+    try {
+        const word = await EtymologyWord.findById(req.params.id);
+        if (!word) {
+            return res.status(404).json({ error: "Word entry not found." });
+        }
+        
+        // Optional: Add a check here to ensure word.userId matches the logged-in user
+        
+        res.json(word);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// PUT: Update a word entry
+app.put("/api/study/etymology-log/:id", async (req, res) => {
+    try {
+        // Exclude userId from the update body to prevent changing ownership
+        const { userId, ...updateData } = req.body;
+        
+        const updatedWord = await EtymologyWord.findByIdAndUpdate(
+            req.params.id,
+            updateData,
+            { new: true, runValidators: true } // new: true returns the updated doc
+        );
+        
+        if (!updatedWord) {
+            return res.status(44).json({ error: "Word entry not found." });
+        }
+        
+        // Optional: Add a check here to ensure word.userId matches the logged-in user
+        
+        res.json(updatedWord);
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+// DELETE: Delete a word entry
+app.delete("/api/study/etymology-log/:id", async (req, res) => {
+    try {
+        const deletedWord = await EtymologyWord.findByIdAndDelete(req.params.id);
+        
+        if (!deletedWord) {
+            return res.status(44).json({ error: "Word entry not found." });
+        }
+        
+        // Optional: Add a check here to ensure word.userId matches the logged-in user
+        
+        res.json({ message: "Word entry deleted successfully." });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
     }
 });
 
