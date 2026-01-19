@@ -33,6 +33,11 @@ const Timeline = require('./models/timeline');
 
 const EtymologyWord = require('./models/etymologyWord');
 
+// History Entity Model
+const HistoryEntity = require('./models/history/historyEntitySchema');
+// Helper to slugify titles (e.g., "Pearl Harbor" -> "pearl-harbor")
+const createSlug = (str) => str.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-');
+
 const app = express();
 mongoose.set('strictQuery', false);
 
@@ -2082,6 +2087,111 @@ app.delete("/api/study/etymology-log/:id", async (req, res) => {
         res.json({ message: "Word entry deleted successfully." });
     } catch (e) {
         res.status(500).json({ error: e.message });
+    }
+});
+
+//=======================================================
+// History API
+//=======================================================
+// 1. GET THE ATLAS (The API Saver)
+// Returns a lightweight list of ALL entities.
+// Call this ONCE when the site loads.
+app.get('/api/history/atlas', async (req, res) => {
+    try {
+        // We only select specific fields to keep the payload small
+        const atlas = await HistoryEntity.find({}, {
+            title: 1,
+            slug: 1,
+            type: 1,
+            era: 1,
+            year: 1,
+            geo: 1
+        }).sort({ year: 1 });
+        
+        res.json(atlas);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 2. GET SINGLE PAGE (By Slug)
+// Only called when user clicks a specific node
+app.get('/api/history/entity/:slug', async (req, res) => {
+    try {
+        const entity = await HistoryEntity.findOne({ slug: req.params.slug })
+            .populate('connections.target', 'title slug type'); // Hydrate links
+            
+        if (!entity) return res.status(404).json({ message: "Page not found" });
+        res.json(entity);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 3. CREATE / UPDATE PAGE
+// This allows you to write notes and save them to the DB
+app.post('/api/history/entity', async (req, res) => {
+    try {
+        const { title, type, content, summary, era, year, connections } = req.body;
+        const slug = createSlug(title);
+
+        // Upsert: Update if exists, Create if not
+        const updatedEntity = await HistoryEntity.findOneAndUpdate(
+            { slug: slug },
+            {
+                title,
+                slug,
+                type,
+                content,
+                summary,
+                era,
+                year,
+                connections // Expects array of { target: _id, type: 'leads_to' }
+            },
+            { new: true, upsert: true, setDefaultsOnInsert: true }
+        );
+
+        res.json(updatedEntity);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 4. SEARCH (Concept based)
+app.get('/api/history/search', async (req, res) => {
+    try {
+        const { q } = req.query;
+        const results = await HistoryEntity.find(
+            { $text: { $search: q } },
+            { score: { $meta: "textScore" } }
+        )
+        .sort({ score: { $meta: "textScore" } })
+        .limit(10);
+        
+        res.json(results);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/history/entity/:slug', async (req, res) => {
+    try {
+        const { slug } = req.params;
+        const result = await HistoryEntity.findOneAndDelete({ slug });
+        
+        if (!result) {
+            return res.status(404).json({ error: "Entity not found" });
+        }
+
+        // Optional: Clean up connections in other documents that point to this one
+        await HistoryEntity.updateMany(
+            { "connections.target": result._id },
+            { $pull: { connections: { target: result._id } } }
+        );
+
+        res.json({ message: "Deleted successfully", id: result._id });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 
