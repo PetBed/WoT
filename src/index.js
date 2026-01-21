@@ -2098,16 +2098,10 @@ app.delete("/api/study/etymology-log/:id", async (req, res) => {
 // Call this ONCE when the site loads.
 app.get('/api/history/atlas', async (req, res) => {
     try {
-        // We only select specific fields to keep the payload small
+        // Added connections: 1 to the projection to support Backlinks logic on frontend
         const atlas = await HistoryEntity.find({}, {
-            title: 1,
-            slug: 1,
-            type: 1,
-            era: 1,
-            year: 1,
-            geo: 1
+            title: 1, slug: 1, type: 1, era: 1, year: 1, geo: 1, connections: 1
         }).sort({ year: 1 });
-        
         res.json(atlas);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -2132,25 +2126,28 @@ app.get('/api/history/entity/:slug', async (req, res) => {
 // This allows you to write notes and save them to the DB
 app.post('/api/history/entity', async (req, res) => {
     try {
-        const { title, type, content, summary, era, year, connections } = req.body;
+        // Added dateDisplay, location, takeaway to destructuring
+        const { title, type, content, summary, era, year, connections, dateDisplay, location, takeaway } = req.body;
         const slug = createSlug(title);
-
-        // Upsert: Update if exists, Create if not
+        
         const updatedEntity = await HistoryEntity.findOneAndUpdate(
             { slug: slug },
-            {
-                title,
-                slug,
-                type,
-                content,
-                summary,
-                era,
-                year,
-                connections // Expects array of { target: _id, type: 'leads_to' }
+            { 
+                title, 
+                slug, 
+                type, 
+                content, 
+                summary, 
+                era, 
+                year, 
+                connections,
+                dateDisplay, // Added
+                location,    // Added
+                takeaway     // Added
             },
             { new: true, upsert: true, setDefaultsOnInsert: true }
         );
-
+        
         res.json(updatedEntity);
     } catch (err) {
         res.status(500).json({ error: err.message });
