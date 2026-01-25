@@ -35,6 +35,10 @@ const EtymologyWord = require('./models/etymologyWord');
 
 // History Entity Model
 const HistoryEntity = require('./models/history/historyEntitySchema');
+
+// --- Tarot App Models ---
+const tarotRoutes = require('./routes/tarot');
+
 // Helper to slugify titles (e.g., "Pearl Harbor" -> "pearl-harbor")
 const createSlug = (str) => str.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-');
 
@@ -2191,6 +2195,11 @@ app.delete('/api/history/entity/:slug', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+// =======================================================
+// TAROT API SECTION (/api/tarot)
+// =======================================================
+app.use('/api/tarot', tarotRoutes);
 
 const start = async() => {
   try{
