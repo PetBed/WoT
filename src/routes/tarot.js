@@ -8,7 +8,6 @@ const TarotSpread = require('../models/tarot/tarotSpread.js');
 const TarotReading = require('../models/tarot/tarotReading.js');
 const TarotCardNote = require('../models/tarot/tarotCardNote.js');
 
-// ... (init endpoint remains same) ...
 // ==========================================
 // 1. BOOTSTRAP ENDPOINT
 // ==========================================
@@ -41,7 +40,6 @@ router.put('/cards/:cardId/notes', async (req, res) => {
         interpretation: req.body.interpretation,
         meaning: req.body.meaning,
         symbolism: req.body.symbolism,
-        // [UPDATED] Handles both URL and Base64 string
         customImage: req.body.customImage 
     };
 
@@ -53,17 +51,22 @@ router.put('/cards/:cardId/notes', async (req, res) => {
         );
         res.json(note);
     } catch (err) {
-        // Note: Check server.js body parser limit if large images fail
         res.status(400).json({ error: err.message });
     }
 });
 
-// ... (rest of the endpoints: readings, spreads, stats) ...
-// (I am omitting the rest for brevity as they are unchanged, but ensure they are present in your file)
+// ==========================================
+// 3. READINGS
+// ==========================================
 router.get('/readings', async (req, res) => {
     const { userId, page = 1, limit = 10 } = req.query;
     try {
-        const readings = await TarotReading.find({ userId }).sort({ date: -1 }).limit(limit * 1).skip((page - 1) * limit).populate('spreadId', 'name').lean();
+        const readings = await TarotReading.find({ userId })
+            .sort({ date: -1 })
+            .limit(limit * 1)
+            .skip((page - 1) * limit)
+            .populate('spreadId', 'name')
+            .lean();
         const count = await TarotReading.countDocuments({ userId });
         res.json({ readings, totalPages: Math.ceil(count / limit), currentPage: page });
     } catch (err) { res.status(500).json({ error: err.message }); }
@@ -77,6 +80,25 @@ router.post('/readings', async (req, res) => {
     } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
+router.put('/readings/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updatedReading = await TarotReading.findByIdAndUpdate(id, req.body, { new: true });
+        res.json(updatedReading);
+    } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+router.delete('/readings/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        await TarotReading.findByIdAndDelete(id);
+        res.json({ message: "Deleted successfully" });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ==========================================
+// 4. SPREADS
+// ==========================================
 router.post('/spreads', async (req, res) => {
     try {
         const newSpread = new TarotSpread(req.body);
@@ -93,6 +115,18 @@ router.put('/spreads/:id', async (req, res) => {
     } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
+// [NEW] Delete Spread
+router.delete('/spreads/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        await TarotSpread.findByIdAndDelete(id);
+        res.json({ message: "Deleted successfully" });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ==========================================
+// 5. STATS
+// ==========================================
 router.get('/stats', async (req, res) => {
     const { userId } = req.query;
     if (!userId) return res.status(400).json({ error: "User ID required" });
