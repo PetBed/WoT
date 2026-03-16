@@ -39,6 +39,11 @@ const HistoryEntity = require('./models/history/historyEntitySchema');
 // --- Tarot App Models ---
 const tarotRoutes = require('./routes/tarot');
 
+// --- Music Analysis Models and Routes ---
+const songsRouter       = require('./routes/songs');
+const annotationsRouter = require('./routes/annotations');
+const motifsRouter      = require('./routes/motifs');
+
 // Helper to slugify titles (e.g., "Pearl Harbor" -> "pearl-harbor")
 const createSlug = (str) => str.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-');
 
@@ -2200,6 +2205,17 @@ app.delete('/api/history/entity/:slug', async (req, res) => {
 // TAROT API SECTION (/api/tarot)
 // =======================================================
 app.use('/api/tarot', tarotRoutes);
+
+// =======================================================
+// MUSIC ANALYSIS API SECTION
+// =======================================================
+app.use('/api/songs', songsRouter);
+app.use('/api/songs/:songId/annotations', annotationsRouter);
+app.use('/api/motifs', motifsRouter);
+
+// ── 404 + error handling ──────────────────────────────────────────────────────
+// app.use(notFound);
+// app.use(errorHandler);
 
 const start = async() => {
   try{
