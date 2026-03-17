@@ -58,8 +58,9 @@ router.post('/', asyncHandler(async (req, res) => {
   if (!songExists) return res.status(404).json({ error: 'Song not found' });
 
   const {
-    lineId, startChar, endChar, selectedText,
-    content, author, tier, tags, tsAnchor,
+    lineId, endLineId, startChar, endChar, selectedText,
+    content, author, tier, tags, tsAnchor, includesSpeaker, linkedMotifId,
+    choreoNote, costumeNote,
   } = req.body;
 
   // Basic required-field validation
@@ -72,14 +73,19 @@ router.post('/', asyncHandler(async (req, res) => {
   const ann = await Annotation.create({
     songId,
     lineId,
+    endLineId:       endLineId ?? null,
     startChar,
     endChar,
-    selectedText: selectedText.trim(),
-    content:      content.trim(),
-    author:       author || 'Anonymous',
-    tier:         tier   || 'lyrics',
-    tags:         Array.isArray(tags) ? tags.map(t => t.trim()).filter(Boolean) : [],
-    tsAnchor:     tsAnchor || null,
+    selectedText:    selectedText.trim(),
+    content:         content.trim(),
+    author:          author || 'Anonymous',
+    tier:            tier   || 'lyrics',
+    tags:            Array.isArray(tags) ? tags.map(t => t.trim()).filter(Boolean) : [],
+    tsAnchor:        tsAnchor || null,
+    includesSpeaker: !!includesSpeaker,
+    linkedMotifId:   linkedMotifId || null,
+    choreoNote:      choreoNote    || null,
+    costumeNote:     costumeNote   || null,
   });
 
   res.status(201).json(ann);
@@ -90,7 +96,13 @@ router.post('/', asyncHandler(async (req, res) => {
    Update an annotation (any subset of fields).
 ───────────────────────────────────────────── */
 router.put('/:id', asyncHandler(async (req, res) => {
-  const allowed = ['content', 'tier', 'tags', 'tsAnchor', 'author'];
+  // content, tier, tags, tsAnchor — always editable
+  // lineId, endLineId, startChar, endChar, selectedText, includesSpeaker — range reselect
+  const allowed = [
+    'content', 'tier', 'tags', 'tsAnchor', 'author',
+    'lineId', 'endLineId', 'startChar', 'endChar', 'selectedText', 'includesSpeaker',
+    'linkedMotifId', 'choreoNote', 'costumeNote',
+  ];
   const update  = {};
   for (const key of allowed) {
     if (req.body[key] !== undefined) update[key] = req.body[key];

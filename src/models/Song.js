@@ -14,6 +14,8 @@ const SongSchema = new mongoose.Schema({
   composer: { type: String, default: 'Anaïs Mitchell', trim: true },
   durStr:   { type: String, default: '0:00' },   // human-readable, e.g. "3:14"
   dur:      { type: Number, default: 0 },        // duration in seconds
+  audioUrl: { type: String, default: null, trim: true }, // direct or Google Drive stream URL
+  notes:    { type: String, default: '' },               // free-form song-level analysis notes
   lyrics:   { type: [LyricLineSchema], default: [] },
 }, {
   timestamps: true,   // createdAt, updatedAt

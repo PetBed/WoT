@@ -4,6 +4,11 @@ const dotenv = require('dotenv');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const bcrypt = require('bcryptjs');
+const { Resolver } = require('dns');
+const resolver = new Resolver();
+
+// Set Servers
+resolver.setServers(["1.1.1.1", "8.8.8.8"]);
 
 // Existing Models
 const Customer = require('./models/customer');
@@ -43,6 +48,7 @@ const tarotRoutes = require('./routes/tarot');
 const songsRouter       = require('./routes/songs');
 const annotationsRouter = require('./routes/annotations');
 const motifsRouter      = require('./routes/motifs');
+const { errorHandler, notFound } = require('./middleware/errorHandler');
 
 // Helper to slugify titles (e.g., "Pearl Harbor" -> "pearl-harbor")
 const createSlug = (str) => str.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-');
@@ -2214,8 +2220,8 @@ app.use('/api/songs/:songId/annotations', annotationsRouter);
 app.use('/api/motifs', motifsRouter);
 
 // ── 404 + error handling ──────────────────────────────────────────────────────
-// app.use(notFound);
-// app.use(errorHandler);
+app.use(notFound);
+app.use(errorHandler);
 
 const start = async() => {
   try{

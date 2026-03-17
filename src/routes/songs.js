@@ -44,7 +44,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
    Body: { title, trackNo?, composer?, durStr?, dur?, lyrics? }
 ───────────────────────────────────────────── */
 router.post('/', asyncHandler(async (req, res) => {
-  const { title, trackNo, composer, durStr, dur, lyrics } = req.body;
+  const { title, trackNo, composer, durStr, dur, audioUrl, lyrics } = req.body;
 
   if (!title?.trim()) {
     return res.status(400).json({ error: 'title is required' });
@@ -56,6 +56,7 @@ router.post('/', asyncHandler(async (req, res) => {
     composer: composer ?? 'Anaïs Mitchell',
     durStr:   durStr   ?? '0:00',
     dur:      dur      ?? 0,
+    audioUrl: audioUrl ?? null,
     lyrics:   lyrics   ?? [],
   });
 
@@ -67,7 +68,7 @@ router.post('/', asyncHandler(async (req, res) => {
    Full or partial update. Accepts any subset of fields.
 ───────────────────────────────────────────── */
 router.put('/:id', asyncHandler(async (req, res) => {
-  const allowed = ['title', 'trackNo', 'composer', 'durStr', 'dur', 'lyrics'];
+  const allowed = ['title', 'trackNo', 'composer', 'durStr', 'dur', 'audioUrl', 'notes', 'lyrics'];
   const update  = {};
   for (const key of allowed) {
     if (req.body[key] !== undefined) update[key] = req.body[key];
