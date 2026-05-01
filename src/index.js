@@ -857,8 +857,23 @@ app.put('/api/study/settings/darkmode', async (req, res) => {
 //=======================================================
 app.get('/api/study/tasks', async (req, res) => {
     try {
-        const tasks = await Task.find({ userId: req.query.userId });
+        const tasks = await Task.find({ userId: req.query.userId }).sort({ order: 1 });
         res.json(tasks);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+app.put('/api/study/tasks/reorder', async (req, res) => {
+    try {
+        const { orderedIds } = req.body;
+        if (!orderedIds || !Array.isArray(orderedIds)) {
+            return res.status(400).json({ error: 'orderedIds array is required.' });
+        }
+        const updates = orderedIds.map((id, index) =>
+            Task.findByIdAndUpdate(id, { order: index })
+        );
+        await Promise.all(updates);
+        res.json({ message: 'Task order updated.' });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -921,6 +936,31 @@ app.put('/api/study/tasks/:id/subtasks/:subtaskId', async (req, res) => {
         res.json(task);
     } catch (e) {
         res.status(400).json({ error: e.message });
+    }
+});
+
+app.put('/api/study/tasks/:id/subtasks/reorder', async (req, res) => {
+    try {
+        const { orderedIds } = req.body;
+        if (!orderedIds || !Array.isArray(orderedIds)) {
+            return res.status(400).json({ error: 'orderedIds array is required.' });
+        }
+
+        const task = await Task.findById(req.params.id);
+        if (!task) return res.status(404).json({ error: 'Task not found' });
+
+        const subTaskMap = new Map(task.subTasks.map(subTask => [subTask._id.toString(), subTask]));
+        const reorderedSubTasks = orderedIds.map(id => subTaskMap.get(id)).filter(Boolean);
+
+        if (reorderedSubTasks.length !== task.subTasks.length) {
+            return res.status(400).json({ error: 'ID mismatch, reorder failed' });
+        }
+
+        task.subTasks = reorderedSubTasks;
+        await task.save();
+        res.json(task);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
     }
 });
 
@@ -1088,6 +1128,33 @@ app.put('/api/study/sound-library/edit/:soundId', async (req, res) => {
     }
 });
 
+app.put('/api/study/sound-library/reorder', async (req, res) => {
+    try {
+        const { userId, orderedIds } = req.body;
+        if (!userId || !orderedIds || !Array.isArray(orderedIds)) {
+            return res.status(400).json({ error: 'userId and orderedIds array are required.' });
+        }
+
+        const user = await StudyUser.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const soundMap = new Map(user.soundLibrary.map(sound => [sound._id.toString(), sound]));
+        const reorderedSounds = orderedIds.map(id => soundMap.get(id)).filter(Boolean);
+
+        if (reorderedSounds.length !== user.soundLibrary.length) {
+            return res.status(400).json({ error: 'ID mismatch, reorder failed' });
+        }
+
+        user.soundLibrary = reorderedSounds;
+        await user.save();
+        res.json(user.soundLibrary);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // ADDED: All routes for the Flashcard feature
 // ==========================================
 // FLASHCARD SETS API
@@ -1100,8 +1167,23 @@ app.get('/api/study/flashcard-sets', async (req, res) => {
     try {
         const { userId } = req.query;
         if (!userId) return res.status(400).json({ error: 'User ID is required.' });
-        const sets = await FlashcardSet.find({ userId }).sort({ updatedAt: -1 });
+        const sets = await FlashcardSet.find({ userId }).sort({ order: 1, updatedAt: -1 });
         res.json(sets);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+app.put('/api/study/flashcard-sets/reorder', async (req, res) => {
+    try {
+        const { orderedIds } = req.body;
+        if (!orderedIds || !Array.isArray(orderedIds)) {
+            return res.status(400).json({ error: 'orderedIds array is required.' });
+        }
+        const updates = orderedIds.map((id, index) =>
+            FlashcardSet.findByIdAndUpdate(id, { order: index })
+        );
+        await Promise.all(updates);
+        res.json({ message: 'Flashcard set order updated.' });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }

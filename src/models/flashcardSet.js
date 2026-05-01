@@ -31,6 +31,8 @@ const flashcardSetSchema = new mongoose.Schema({
         required: true
     },
     flashcards: [flashcardSchema] // Array of flashcards
-}, { timestamps: true });
+}, { timestamps: true, minimize: false });
+
+flashcardSetSchema.add({ order: { type: Number, default: 0 } });
 
 module.exports = mongoose.model('FlashcardSet', flashcardSetSchema);
