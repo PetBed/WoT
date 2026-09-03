@@ -1020,6 +1020,23 @@ app.put('/api/study/logs', async (req, res) => {
                     user.studyLogs.set(subject, studyLogs[subject]);
                 }
             }
+
+            const targetSemId = req.body.activeSemesterId || user.activeSemesterId;
+            if (targetSemId && Array.isArray(user.semesters)) {
+                const activeSem = user.semesters.find(s => s.id === targetSemId);
+                if (activeSem) {
+                    if (!activeSem.studyLogs || typeof activeSem.studyLogs.clear !== 'function') {
+                        activeSem.studyLogs = new Map();
+                    } else {
+                        activeSem.studyLogs.clear();
+                    }
+                    for (const subject in studyLogs) {
+                        if (Object.prototype.hasOwnProperty.call(studyLogs, subject)) {
+                            activeSem.studyLogs.set(subject, studyLogs[subject]);
+                        }
+                    }
+                }
+            }
         }
         
         console.log('[BACKEND] Attempting to save user document...');
@@ -1047,6 +1064,144 @@ app.put('/api/study/streak', async (req, res) => {
         res.json({ message: 'Streak updated' });
     } catch (e) {
         res.status(400).json({ error: e.message });
+    }
+});
+
+//=======================================================
+// SEMESTER MANAGEMENT ROUTES
+//=======================================================
+app.get('/api/study/semesters', async (req, res) => {
+    try {
+        const { userId } = req.query;
+        if (!userId) {
+            return res.status(400).json({ error: 'User ID is required' });
+        }
+        const user = await StudyUser.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        res.json({
+            semesters: user.semesters || [],
+            activeSemesterId: user.activeSemesterId || ''
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.put('/api/study/semesters/sync', async (req, res) => {
+    try {
+        const { userId, semesters, activeSemesterId } = req.body;
+        if (!userId) {
+            return res.status(400).json({ error: 'User ID is required' });
+        }
+        const user = await StudyUser.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        if (Array.isArray(semesters)) {
+            user.semesters = semesters;
+        }
+        if (activeSemesterId !== undefined) {
+            user.activeSemesterId = activeSemesterId;
+        }
+
+        await user.save();
+        res.json({
+            message: 'Semesters synced successfully',
+            semesters: user.semesters,
+            activeSemesterId: user.activeSemesterId
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/study/semesters', async (req, res) => {
+    try {
+        const { userId, semester } = req.body;
+        if (!userId || !semester) {
+            return res.status(400).json({ error: 'User ID and semester data are required' });
+        }
+        const user = await StudyUser.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        if (!user.semesters) user.semesters = [];
+        if (semester.isActive) {
+            user.semesters.forEach(s => s.isActive = false);
+            user.activeSemesterId = semester.id;
+        }
+        user.semesters.push(semester);
+        await user.save();
+        res.status(201).json({
+            message: 'Semester created',
+            semesters: user.semesters,
+            activeSemesterId: user.activeSemesterId
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.put('/api/study/semesters/:id', async (req, res) => {
+    try {
+        const { userId, semester } = req.body;
+        const semesterId = req.params.id;
+        const user = await StudyUser.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const idx = user.semesters.findIndex(s => s.id === semesterId);
+        if (idx === -1) {
+            return res.status(404).json({ error: 'Semester not found' });
+        }
+
+        if (semester.isActive) {
+            user.semesters.forEach(s => s.isActive = false);
+            user.activeSemesterId = semesterId;
+        }
+
+        user.semesters[idx] = { ...user.semesters[idx].toObject(), ...semester };
+        await user.save();
+        res.json({
+            message: 'Semester updated',
+            semesters: user.semesters,
+            activeSemesterId: user.activeSemesterId
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/api/study/semesters/:id', async (req, res) => {
+    try {
+        const userId = req.body.userId || req.query.userId;
+        const semesterId = req.params.id;
+        const user = await StudyUser.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        user.semesters = user.semesters.filter(s => s.id !== semesterId);
+        if (user.activeSemesterId === semesterId) {
+            user.activeSemesterId = user.semesters.length > 0 ? user.semesters[0].id : '';
+            if (user.activeSemesterId && user.semesters[0]) {
+                user.semesters[0].isActive = true;
+            }
+        }
+
+        await user.save();
+        res.json({
+            message: 'Semester deleted',
+            semesters: user.semesters,
+            activeSemesterId: user.activeSemesterId
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
     }
 });
 

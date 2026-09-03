@@ -61,6 +61,45 @@ const studyUserSchema = new mongoose.Schema({
     pendingDrops: {
         type: Array,
         default: []
+    },
+    semesters: [{
+        id: { type: String, required: true },
+        name: { type: String, required: true },
+        startDate: { type: String, default: '' },
+        endDate: { type: String, default: '' },
+        isActive: { type: Boolean, default: false },
+        description: { type: String, default: '' },
+        studyLogs: {
+            type: Map,
+            of: Number,
+            default: {}
+        },
+        exams: [{
+            id: { type: String, required: true },
+            subject: { type: String, required: true },
+            date: { type: String, required: true },
+            paper: { type: String, default: '' },
+            mark: { type: Number, default: null },
+            maxMark: { type: Number, default: 100 },
+            letterGrade: { type: String, default: '' },
+            weight: { type: Number, default: 0 },
+            notes: { type: String, default: '' }
+        }],
+        subjectFinals: [{
+            id: { type: String, required: true },
+            subject: { type: String, required: true },
+            score: { type: Number, default: null },
+            maxScore: { type: Number, default: 100 },
+            gpa: { type: Number, default: null },
+            letterGrade: { type: String, default: '' },
+            creditHours: { type: Number, default: 1 },
+            notes: { type: String, default: '' }
+        }],
+        createdAt: { type: Date, default: Date.now }
+    }],
+    activeSemesterId: {
+        type: String,
+        default: ''
     }
 });
 
