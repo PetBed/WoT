@@ -11,44 +11,44 @@ const resolver = new Resolver();
 resolver.setServers(["1.1.1.1", "8.8.8.8"]);
 
 // Existing Models
-const Customer = require('./models/customer');
-const User = require('./models/user');
-const Note = require('./models/note');
-const PostBoard = require('./models/Post Board/post');
+const Customer = require('../src/models/customer');
+const User = require('../src/models/user');
+const Note = require('../src/models/note');
+const PostBoard = require('../src/models/Post Board/post');
 
 // Study App Models
-const StudyUser = require('./models/studyUser');
-const Task = require('./models/task'); // Task model for the study app
-const FlashcardSet = require('./models/flashcardSet');
+const StudyUser = require('../src/models/studyUser');
+const Task = require('../src/models/task'); // Task model for the study app
+const FlashcardSet = require('../src/models/flashcardSet');
 
 // Collectible Models
-const BaseItem = require('./models/collectible/baseItem');
-const ItemModel = require('./models/collectible/itemModel');
-const CollectedItem = require('./models/collectible/collectedItem');
+const BaseItem = require('../src/models/collectible/baseItem');
+const ItemModel = require('../src/models/collectible/itemModel');
+const CollectedItem = require('../src/models/collectible/collectedItem');
 
 // Flood System Model
-const FloodData = require('./models/flood/floodData');
-const SystemState = require('./models/flood/systemState');
+const FloodData = require('../src/models/flood/floodData');
+const SystemState = require('../src/models/flood/systemState');
 
 // Clock Model
 const ClockDevice = require('./models/clockDevice');
 
 // Timeline Model
-const Timeline = require('./models/timeline'); 
+const Timeline = require('../src/models/timeline');
 
-const EtymologyWord = require('./models/etymologyWord');
+const EtymologyWord = require('../src/models/etymologyWord');
 
 // History Entity Model
-const HistoryEntity = require('./models/history/historyEntitySchema');
+const HistoryEntity = require('../src/models/history/historyEntitySchema');
 
 // --- Tarot App Models ---
-const tarotRoutes = require('./routes/tarot');
+const tarotRoutes = require('../src/routes/tarot');
 
 // --- Music Analysis Models and Routes ---
-const songsRouter       = require('./routes/songs');
-const annotationsRouter = require('./routes/annotations');
-const motifsRouter      = require('./routes/motifs');
-const { errorHandler, notFound } = require('./middleware/errorHandler');
+const songsRouter = require('../src/routes/songs');
+const annotationsRouter = require('../src/routes/annotations');
+const motifsRouter = require('../src/routes/motifs');
+const { errorHandler, notFound } = require('../src/middleware/errorHandler');
 
 // Helper to slugify titles (e.g., "Pearl Harbor" -> "pearl-harbor")
 const createSlug = (str) => str.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-');
@@ -61,32 +61,32 @@ app.use(express.urlencoded({ extended: true }));
 
 // CORRECTED CORS MIDDLEWARE
 app.use((req, res, next) => {
-  // --- DEBUG LOG: Log all incoming requests ---
-  console.log(`[BACKEND] Incoming Request: ${req.method} ${req.originalUrl}`);
-	res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  // const allowedOrigins = [ 'http://127.0.0.1:5500', 'https://petbed.github.io', 'http://127.0.0.1:5501', 'http://127.0.0.1:5500/index.html', 'https://fcgh4w.csb.app', 'http://127.0.0.1:5501/Study%20Website/admin.html', 'https://petbed.github.io/Study%20Website/admin.html'
-  // ];
-  // const origin = req.headers.origin;
-  // if (allowedOrigins.some(allowedOrigin => origin?.startsWith(allowedOrigin))) { res.setHeader('Access-Control-Allow-Origin', origin); }
-  // res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  // res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  
-  // FIX: Handle pre-flight OPTIONS request
-  if (req.method === 'OPTIONS') {
-    console.log('[BACKEND] Handling pre-flight OPTIONS request. Sending 200 OK.');
-    return res.sendStatus(200);
-  }
-  
-  next();
+    // --- DEBUG LOG: Log all incoming requests ---
+    console.log(`[BACKEND] Incoming Request: ${req.method} ${req.originalUrl}`);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+    }
+    // const allowedOrigins = [ 'http://127.0.0.1:5500', 'https://petbed.github.io', 'http://127.0.0.1:5501', 'http://127.0.0.1:5500/index.html', 'https://fcgh4w.csb.app', 'http://127.0.0.1:5501/Study%20Website/admin.html', 'https://petbed.github.io/Study%20Website/admin.html'
+    // ];
+    // const origin = req.headers.origin;
+    // if (allowedOrigins.some(allowedOrigin => origin?.startsWith(allowedOrigin))) { res.setHeader('Access-Control-Allow-Origin', origin); }
+    // res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    // res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+    // FIX: Handle pre-flight OPTIONS request
+    if (req.method === 'OPTIONS') {
+        console.log('[BACKEND] Handling pre-flight OPTIONS request. Sending 200 OK.');
+        return res.sendStatus(200);
+    }
+
+    next();
 });
 
 if (process.env.NODE_ENV !== 'production') {
-  dotenv.config();
+    dotenv.config();
 }
 
 const PORT = process.env.PORT || 3000;
@@ -98,333 +98,333 @@ app.get("/", (req, res) => { res.send("Hello World"); });
 // Customer API
 //=======================================================
 app.get("/api/customers", async (req, res) => {
-  // console.log(await mongoose.connection.db.listCollections().toArray());
-  try {
-    const result = await Customer.find();
-    // res.json({"customers": result});
+    // console.log(await mongoose.connection.db.listCollections().toArray());
+    try {
+        const result = await Customer.find();
+        // res.json({"customers": result});
 
-    const customerId = req.query.id;
-    if (!customerId) {
-      res.json({"customers": result});
-    } else {
-      console.log(customerId);
-      const customer = await Customer.findById(customerId);
-      console.log(customer);
-      if (!customer) {
-        res.status(404).json({"error": "Customer not found"});
-      } else {
-        res.json({customer});
-      }
+        const customerId = req.query.id;
+        if (!customerId) {
+            res.json({ "customers": result });
+        } else {
+            console.log(customerId);
+            const customer = await Customer.findById(customerId);
+            console.log(customer);
+            if (!customer) {
+                res.status(404).json({ "error": "Customer not found" });
+            } else {
+                res.json({ customer });
+            }
+        }
+    } catch (e) {
+        res.status(500).json({ "error": e.message });
     }
-  } catch (e) { 
-    res.status(500).json({"error": e.message});
-  }
 });
 
 app.put("/api/customers", async (req, res) => {
-  try {
-    const customerId = req.query.id;
-    const result = await Customer.replaceOne({_id: customerId}, req.body);
-    res.json({updatedCount: result.modifiedCount});
-  } catch (e) {
-    res.status(500).json({error: e.message});
-  }
+    try {
+        const customerId = req.query.id;
+        const result = await Customer.replaceOne({ _id: customerId }, req.body);
+        res.json({ updatedCount: result.modifiedCount });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 })
 
 app.delete("/api/customers", async (req, res) => {
-  try {
-    const customerId = req.query.id;
-    const result = await Customer.deleteOne({_id: customerId});
-    res.json({deletedCount: result.deletedCount});
-  } catch (e) {
-    res.status(500).json({error: e.message});
-  }
+    try {
+        const customerId = req.query.id;
+        const result = await Customer.deleteOne({ _id: customerId });
+        res.json({ deletedCount: result.deletedCount });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 })
 
 app.post("/api/customers", async (req, res) => {
-  console.log(req.body);
-  const customer = new Customer(req.body);
-  try {
-    await customer.save();
-    res.status(201).json({customer});
-  } catch (e) {
-    res.status(400).json({error: e.message});
-  }
+    console.log(req.body);
+    const customer = new Customer(req.body);
+    try {
+        await customer.save();
+        res.status(201).json({ customer });
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
 });
 
 //=======================================================
 // User API
 //=======================================================
 app.get("/api/users", async (req, res) => {
-  const userId = req.query.id;
-  const result = await User.find();
-  
-  try {
-    if (!userId) {
-      res.json({"user": result});
-    } else {
-      const user = await User.findById(userId);
-      if (!user) {
-        res.status(404).json({"error": "User not found"});
-      } else {
-        res.json({user});
-      }
+    const userId = req.query.id;
+    const result = await User.find();
+
+    try {
+        if (!userId) {
+            res.json({ "user": result });
+        } else {
+            const user = await User.findById(userId);
+            if (!user) {
+                res.status(404).json({ "error": "User not found" });
+            } else {
+                res.json({ user });
+            }
+        }
+    } catch (e) {
+        res.status(500).json({ "error": e.message });
     }
-  } catch (e) {
-    res.status(500).json({"error": e.message});
-  }
 });
 
 app.post("/api/users", async (req, res) => {
-  const { username, password, email } = req.body;
-  console.log(req.body);
+    const { username, password, email } = req.body;
+    console.log(req.body);
 
-  if (!username || !password || !email) {
-    return res.status(400).json({ error: "Username, password, and email are required" });
-  }
+    if (!username || !password || !email) {
+        return res.status(400).json({ error: "Username, password, and email are required" });
+    }
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
-    return res.status(400).json({ error: "Invalid email format" });
-  }
-  const user = new User({ username, password, email });
-  try {
-    await user.save();
-    res.json({
-      userId: user._id,
-    });
-  } catch (e) {
-    res.status(400).json({ error: e.message });
-  }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        return res.status(400).json({ error: "Invalid email format" });
+    }
+    const user = new User({ username, password, email });
+    try {
+        await user.save();
+        res.json({
+            userId: user._id,
+        });
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
 });
 
 app.delete("/api/users", async (req, res) => {
-  try {
-    const userId = req.query.id;
-    const result = await User.deleteOne({_id: userId});
-    res.json({deletedCount: result.deletedCount});
-  } catch (e) {
-    res.status(500).json({error: e.message});
-  }
+    try {
+        const userId = req.query.id;
+        const result = await User.deleteOne({ _id: userId });
+        res.json({ deletedCount: result.deletedCount });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 app.put("/api/users", async (req, res) => {
-  try {
-    const userId = req.query.id;
-    const result = await User.replaceOne({_id: userId}, req.body);
-    res.json({updatedCount: result.modifiedCount});
-  } catch (e) {
-    res.status(500).json({error: e.message});
-  }
+    try {
+        const userId = req.query.id;
+        const result = await User.replaceOne({ _id: userId }, req.body);
+        res.json({ updatedCount: result.modifiedCount });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 app.get("/api/users/login", async (req, res) => {
-  const { email, username, password } = req.query;
-  console.log(email, username, password);
+    const { email, username, password } = req.query;
+    console.log(email, username, password);
 
-  if ((!email && !username) || !password) {
-    console.log("Email/Username and password are required");
-    return res.status(400).json({ error: "Email/Username and password are required" });
-  }
+    if ((!email && !username) || !password) {
+        console.log("Email/Username and password are required");
+        return res.status(400).json({ error: "Email/Username and password are required" });
+    }
 
-  const query = email ? { email, password } : { username, password };
-  const user = await User
-    .findOne(query)
-    .select('_id');
+    const query = email ? { email, password } : { username, password };
+    const user = await User
+        .findOne(query)
+        .select('_id');
 
-  if (!user) {
-    console.log("User not found");
-    return res.status(404).json({ error: "User not found" });
-  }
+    if (!user) {
+        console.log("User not found");
+        return res.status(404).json({ error: "User not found" });
+    }
 
-  res.json({ userId: user._id });
+    res.json({ userId: user._id });
 });
 
 //=======================================================
 // Notes API
 //=======================================================
 app.get("/api/notes", async (req, res) => {
-  const noteId = req.query.noteId;
-  const userId = req.query.userId;
+    const noteId = req.query.noteId;
+    const userId = req.query.userId;
 
-  try {
-    const notes = await Note.find();
+    try {
+        const notes = await Note.find();
 
-    if (noteId && userId) {
-      res.json({"error": "Only one query parameter is allowed"});
-    } else if (noteId) {
-      const note = await Note.findById(noteId);
-      if (!note) {
-        res.status(404).json({ error: "Note not found" });
-      } else {
-        res.json({ note });
-      }
-    } else if (userId) {
-      const userNotes = await Note.find({ user: userId });
-      res.json({ notes: userNotes });
-      if (!userNotes) {
-        res.status(404).json({ error: "Notes not found" });
-      }
-    } else {
-      res.json({ notes });
+        if (noteId && userId) {
+            res.json({ "error": "Only one query parameter is allowed" });
+        } else if (noteId) {
+            const note = await Note.findById(noteId);
+            if (!note) {
+                res.status(404).json({ error: "Note not found" });
+            } else {
+                res.json({ note });
+            }
+        } else if (userId) {
+            const userNotes = await Note.find({ user: userId });
+            res.json({ notes: userNotes });
+            if (!userNotes) {
+                res.status(404).json({ error: "Notes not found" });
+            }
+        } else {
+            res.json({ notes });
+        }
+    } catch (e) {
+        res.status(500).json({ error: e.message });
     }
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
 });
 
 app.post("/api/notes", async (req, res) => {
-  const { title, content, userId } = req.body;
-  if (!title || !userId) {
-    return res.status(400).json({ error: "Title, and userId are required" });
-  }
+    const { title, content, userId } = req.body;
+    if (!title || !userId) {
+        return res.status(400).json({ error: "Title, and userId are required" });
+    }
 
-  const note = new Note({
-    title,
-    content,
-    user: userId,
-  });
-  try {
-    await note.save();
-    res.status(201).json({ note });
-  } catch (e) {
-    res.status(400).json({ error: e.message });
-  }
+    const note = new Note({
+        title,
+        content,
+        user: userId,
+    });
+    try {
+        await note.save();
+        res.status(201).json({ note });
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
 });
 
 app.delete("/api/notes", async (req, res) => {
-  try {
-    const noteId = req.query.id;
-    const result = await Note.deleteOne({_id: noteId});
-    res.json({deletedCount: result.deletedCount});
-  } catch (e) {
-    res.status(500).json({error: e.message});
-  }
+    try {
+        const noteId = req.query.id;
+        const result = await Note.deleteOne({ _id: noteId });
+        res.json({ deletedCount: result.deletedCount });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 app.put("/api/notes", async (req, res) => {
-  try {
-    const noteId = req.query.id;
-    const result = await Note.replaceOne({_id: noteId}, req.body);
-    res.json({updatedCount: result.modifiedCount});
-  } catch (e) {
-    res.status(500).json({error: e.message});
-  }
+    try {
+        const noteId = req.query.id;
+        const result = await Note.replaceOne({ _id: noteId }, req.body);
+        res.json({ updatedCount: result.modifiedCount });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 //=======================================================
 // Post Board API
 //=======================================================
 app.get("/api/postboard", async (req, res) => {
-  const postId = req.query.postId;
+    const postId = req.query.postId;
 
-  try {
-    const posts = await PostBoard.find();
+    try {
+        const posts = await PostBoard.find();
 
-    if (postId) {
-      const post = await PostBoard.findById(postId);
-      if (!post) {
-        res.status(404).json({ error: "Post not found" });
-      } else {
-        res.json({ post });
-      }
-    } else {
-      res.json({ posts });
+        if (postId) {
+            const post = await PostBoard.findById(postId);
+            if (!post) {
+                res.status(404).json({ error: "Post not found" });
+            } else {
+                res.json({ post });
+            }
+        } else {
+            res.json({ posts });
+        }
+    } catch (e) {
+        res.status(500).json({ error: e.message });
     }
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
 });
 
 app.post("/api/postboard", async (req, res) => {
-  const { content, date } = req.body;
-  if (!content || !date) {
-    return res.status(400).json({ error: "Content and date is required" });
-  }
+    const { content, date } = req.body;
+    if (!content || !date) {
+        return res.status(400).json({ error: "Content and date is required" });
+    }
 
-  const post = new PostBoard({
-    content,
-    date: new Date(date),
-  });
-  try {
-    await post.save();
-    res.status(201).json({ post });
-  } catch (e) {
-    res.status(400).json({ error: e.message });
-  }
+    const post = new PostBoard({
+        content,
+        date: new Date(date),
+    });
+    try {
+        await post.save();
+        res.status(201).json({ post });
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
 });
 
 app.delete("/api/postboard", async (req, res) => {
-  try {
-    const postId = req.query.id;
-    const result = await PostBoard.deleteMany({});
-    res.json({deletedCount: result.deletedCount});
-  } catch (e) {
-    res.status(500).json({error: e.message});
-  }
+    try {
+        const postId = req.query.id;
+        const result = await PostBoard.deleteMany({});
+        res.json({ deletedCount: result.deletedCount });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 app.put("/api/postboard", async (req, res) => {
-  try {
-    const noteId = req.query.id;
-    const result = await Note.replaceOne({_id: noteId}, req.body);
-    res.json({updatedCount: result.modifiedCount});
-  } catch (e) {
-    res.status(500).json({error: e.message});
-  }
+    try {
+        const noteId = req.query.id;
+        const result = await Note.replaceOne({ _id: noteId }, req.body);
+        res.json({ updatedCount: result.modifiedCount });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 //=======================================================
 // SDG News Scrapper
 //=======================================================
 app.get("/api/sdgnews", async (req, res) => {
-  var allNews = await fetchSDGNewsFirstPages(2);
-  res.json({ allNews });
+    var allNews = await fetchSDGNewsFirstPages(2);
+    res.json({ allNews });
 });
 
 
 async function fetchSDGNewsPage(page) {
-  try {
-    const url = `https://sdgs.un.org/news?page=%2C%2C${page}`;
-    const response = await axios.get(url);
-    const html = response.data;
-    const $ = cheerio.load(html);
+    try {
+        const url = `https://sdgs.un.org/news?page=%2C%2C${page}`;
+        const response = await axios.get(url);
+        const html = response.data;
+        const $ = cheerio.load(html);
 
-    const newsItems = [];
+        const newsItems = [];
 
-    $('.tabs-button .card').each((index, element) => {
-      const title = $(element).find('.card-title').text().trim();
-      const link = 'https://sdgs.un.org' + $(element).find('.card-body > a').attr('href');
-      const date = $(element).find('.card-date').text().trim();
-      const summary = $(element).find('.card-text').text().trim();
-      const goals = $(element).find('.badge a').map((i, el) => $(el).text().trim()).get();
-      const image = 'https://sdgs.un.org' + $(element).find('.card-img-top').attr('src');
+        $('.tabs-button .card').each((index, element) => {
+            const title = $(element).find('.card-title').text().trim();
+            const link = 'https://sdgs.un.org' + $(element).find('.card-body > a').attr('href');
+            const date = $(element).find('.card-date').text().trim();
+            const summary = $(element).find('.card-text').text().trim();
+            const goals = $(element).find('.badge a').map((i, el) => $(el).text().trim()).get();
+            const image = 'https://sdgs.un.org' + $(element).find('.card-img-top').attr('src');
 
-      newsItems.push({ title, link, date, summary, goals, image });
-    });
+            newsItems.push({ title, link, date, summary, goals, image });
+        });
 
-    return newsItems;
-  } catch (error) {
-    console.error('Error fetching SDG news:', error);
-  }
+        return newsItems;
+    } catch (error) {
+        console.error('Error fetching SDG news:', error);
+    }
 }
 
 async function fetchSDGNewsFirstPages(n) {
-  // let allNews = [];
-  // for (let i = 0; i < n; i++) {
-  //   const pageNews = await fetchSDGNewsPage(i);
-  //   console.log(`Fetched ${pageNews.length} items from page ${i}`);
-  //   allNews = allNews.concat(pageNews);
-  // }
-  // return allNews;
-  
-  try {
-    const pages = Array.from({ length: n }, (_, i) => i);
-    const results = await Promise.all(pages.map(fetchSDGNewsPage));
-    return results.flat();
-  } catch (error) {
-    console.error("Error fetching SDG news pages:", error);
-  }
+    // let allNews = [];
+    // for (let i = 0; i < n; i++) {
+    //   const pageNews = await fetchSDGNewsPage(i);
+    //   console.log(`Fetched ${pageNews.length} items from page ${i}`);
+    //   allNews = allNews.concat(pageNews);
+    // }
+    // return allNews;
+
+    try {
+        const pages = Array.from({ length: n }, (_, i) => i);
+        const results = await Promise.all(pages.map(fetchSDGNewsPage));
+        return results.flat();
+    } catch (error) {
+        console.error("Error fetching SDG news pages:", error);
+    }
 }
 
 //=======================================================
@@ -434,7 +434,7 @@ app.post('/api/flood-data', async (req, res) => {
     try {
         const newData = new FloodData(req.body);
         await newData.save();
-        
+
         // After saving, find the current system state to send back to the ESP32
         let state = await SystemState.findOne();
         if (!state) {
@@ -442,7 +442,7 @@ app.post('/api/flood-data', async (req, res) => {
             state = new SystemState();
             await state.save();
         }
-        
+
         res.status(201).json(state);
 
     } catch (error) {
@@ -461,7 +461,7 @@ app.get('/api/flood-data/latest', async (req, res) => {
         const systemState = await SystemState.findOne();
 
         const responseData = latestData.toObject();
-        
+
         // Send the boolean states for the toggles to be set correctly on the dashboard
         responseData.remoteLedIsOn = systemState ? systemState.remoteLedIsOn : false;
         responseData.emergencyIsActive = systemState ? systemState.emergencyIsActive : false;
@@ -477,7 +477,7 @@ app.get('/api/flood-data/latest', async (req, res) => {
 // Endpoints for dashboard controls with new priority logic
 app.post('/api/controls/:command', async (req, res) => {
     const { command } = req.params;
-    
+
     try {
         let currentState = await SystemState.findOne();
         if (!currentState) {
@@ -503,7 +503,7 @@ app.post('/api/controls/:command', async (req, res) => {
         } else {
             currentState.remoteLedState = 'OFF';
         }
-        
+
         // 3. Save the updated state and respond
         const updatedState = await currentState.save();
         res.json(updatedState);
@@ -519,153 +519,153 @@ app.post('/api/controls/:command', async (req, res) => {
 
 // GET clock settings by device ID
 app.get('/api/clock/settings/:deviceId', async (req, res) => {
-  try {
-    const { deviceId } = req.params;
-    
-    let device = await ClockDevice.findOne({ deviceId });
-    
-    // If device doesn't exist, create it with defaults
-    if (!device) {
-      device = new ClockDevice({ deviceId });
-      await device.save();
-      console.log(`[CLOCK] New device registered: ${deviceId}`);
+    try {
+        const { deviceId } = req.params;
+
+        let device = await ClockDevice.findOne({ deviceId });
+
+        // If device doesn't exist, create it with defaults
+        if (!device) {
+            device = new ClockDevice({ deviceId });
+            await device.save();
+            console.log(`[CLOCK] New device registered: ${deviceId}`);
+        }
+
+        // Update last seen timestamp
+        device.lastSeen = new Date();
+        await device.save();
+
+        res.json({
+            success: true,
+            settings: {
+                alarmHour: device.alarmSettings.hour,
+                alarmMinute: device.alarmSettings.minute,
+                alarmEnabled: device.alarmSettings.enabled,
+                city: device.location.city,
+                matrixIntensity: device.displaySettings.matrixIntensity
+            }
+        });
+    } catch (e) {
+        console.error('[CLOCK] Error fetching settings:', e);
+        res.status(500).json({ success: false, error: e.message });
     }
-    
-    // Update last seen timestamp
-    device.lastSeen = new Date();
-    await device.save();
-    
-    res.json({
-      success: true,
-      settings: {
-        alarmHour: device.alarmSettings.hour,
-        alarmMinute: device.alarmSettings.minute,
-        alarmEnabled: device.alarmSettings.enabled,
-        city: device.location.city,
-        matrixIntensity: device.displaySettings.matrixIntensity
-      }
-    });
-  } catch (e) {
-    console.error('[CLOCK] Error fetching settings:', e);
-    res.status(500).json({ success: false, error: e.message });
-  }
 });
 
 // POST/PUT update alarm settings
 app.put('/api/clock/settings/:deviceId/alarm', async (req, res) => {
-  try {
-    const { deviceId } = req.params;
-    const { hour, minute, enabled } = req.body;
-    
-    // Validate inputs
-    if (hour !== undefined && (hour < 0 || hour > 23)) {
-      return res.status(400).json({ success: false, error: 'Hour must be between 0-23' });
+    try {
+        const { deviceId } = req.params;
+        const { hour, minute, enabled } = req.body;
+
+        // Validate inputs
+        if (hour !== undefined && (hour < 0 || hour > 23)) {
+            return res.status(400).json({ success: false, error: 'Hour must be between 0-23' });
+        }
+        if (minute !== undefined && (minute < 0 || minute > 59)) {
+            return res.status(400).json({ success: false, error: 'Minute must be between 0-59' });
+        }
+
+        let device = await ClockDevice.findOne({ deviceId });
+
+        if (!device) {
+            device = new ClockDevice({ deviceId });
+        }
+
+        // Update only provided fields
+        if (hour !== undefined) device.alarmSettings.hour = hour;
+        if (minute !== undefined) device.alarmSettings.minute = minute;
+        if (enabled !== undefined) device.alarmSettings.enabled = enabled;
+
+        device.lastSeen = new Date();
+        await device.save();
+
+        console.log(`[CLOCK] Alarm updated for ${deviceId}: ${device.alarmSettings.hour}:${device.alarmSettings.minute} (${device.alarmSettings.enabled ? 'ON' : 'OFF'})`);
+
+        res.json({
+            success: true,
+            message: 'Alarm settings updated',
+            settings: {
+                alarmHour: device.alarmSettings.hour,
+                alarmMinute: device.alarmSettings.minute,
+                alarmEnabled: device.alarmSettings.enabled
+            }
+        });
+    } catch (e) {
+        console.error('[CLOCK] Error updating alarm:', e);
+        res.status(500).json({ success: false, error: e.message });
     }
-    if (minute !== undefined && (minute < 0 || minute > 59)) {
-      return res.status(400).json({ success: false, error: 'Minute must be between 0-59' });
-    }
-    
-    let device = await ClockDevice.findOne({ deviceId });
-    
-    if (!device) {
-      device = new ClockDevice({ deviceId });
-    }
-    
-    // Update only provided fields
-    if (hour !== undefined) device.alarmSettings.hour = hour;
-    if (minute !== undefined) device.alarmSettings.minute = minute;
-    if (enabled !== undefined) device.alarmSettings.enabled = enabled;
-    
-    device.lastSeen = new Date();
-    await device.save();
-    
-    console.log(`[CLOCK] Alarm updated for ${deviceId}: ${device.alarmSettings.hour}:${device.alarmSettings.minute} (${device.alarmSettings.enabled ? 'ON' : 'OFF'})`);
-    
-    res.json({
-      success: true,
-      message: 'Alarm settings updated',
-      settings: {
-        alarmHour: device.alarmSettings.hour,
-        alarmMinute: device.alarmSettings.minute,
-        alarmEnabled: device.alarmSettings.enabled
-      }
-    });
-  } catch (e) {
-    console.error('[CLOCK] Error updating alarm:', e);
-    res.status(500).json({ success: false, error: e.message });
-  }
 });
 
 // POST update city/location
 app.put('/api/clock/settings/:deviceId/location', async (req, res) => {
-  try {
-    const { deviceId } = req.params;
-    const { city } = req.body;
-    
-    if (!city || city.trim() === '') {
-      return res.status(400).json({ success: false, error: 'City name is required' });
+    try {
+        const { deviceId } = req.params;
+        const { city } = req.body;
+
+        if (!city || city.trim() === '') {
+            return res.status(400).json({ success: false, error: 'City name is required' });
+        }
+
+        let device = await ClockDevice.findOne({ deviceId });
+
+        if (!device) {
+            device = new ClockDevice({ deviceId });
+        }
+
+        device.location.city = city;
+        device.lastSeen = new Date();
+        await device.save();
+
+        console.log(`[CLOCK] Location updated for ${deviceId}: ${city}`);
+
+        res.json({
+            success: true,
+            message: 'Location updated',
+            city: device.location.city
+        });
+    } catch (e) {
+        console.error('[CLOCK] Error updating location:', e);
+        res.status(500).json({ success: false, error: e.message });
     }
-    
-    let device = await ClockDevice.findOne({ deviceId });
-    
-    if (!device) {
-      device = new ClockDevice({ deviceId });
-    }
-    
-    device.location.city = city;
-    device.lastSeen = new Date();
-    await device.save();
-    
-    console.log(`[CLOCK] Location updated for ${deviceId}: ${city}`);
-    
-    res.json({
-      success: true,
-      message: 'Location updated',
-      city: device.location.city
-    });
-  } catch (e) {
-    console.error('[CLOCK] Error updating location:', e);
-    res.status(500).json({ success: false, error: e.message });
-  }
 });
 
 // GET all registered clock devices (for admin dashboard)
 app.get('/api/clock/devices', async (req, res) => {
-  try {
-    const devices = await ClockDevice.find().sort({ lastSeen: -1 });
-    res.json({
-      success: true,
-      count: devices.length,
-      devices: devices.map(d => ({
-        deviceId: d.deviceId,
-        deviceName: d.deviceName,
-        lastSeen: d.lastSeen,
-        alarmEnabled: d.alarmSettings.enabled,
-        city: d.location.city
-      }))
-    });
-  } catch (e) {
-    console.error('[CLOCK] Error fetching devices:', e);
-    res.status(500).json({ success: false, error: e.message });
-  }
+    try {
+        const devices = await ClockDevice.find().sort({ lastSeen: -1 });
+        res.json({
+            success: true,
+            count: devices.length,
+            devices: devices.map(d => ({
+                deviceId: d.deviceId,
+                deviceName: d.deviceName,
+                lastSeen: d.lastSeen,
+                alarmEnabled: d.alarmSettings.enabled,
+                city: d.location.city
+            }))
+        });
+    } catch (e) {
+        console.error('[CLOCK] Error fetching devices:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
 });
 
 // DELETE a clock device
 app.delete('/api/clock/settings/:deviceId', async (req, res) => {
-  try {
-    const { deviceId } = req.params;
-    const result = await ClockDevice.deleteOne({ deviceId });
-    
-    if (result.deletedCount === 0) {
-      return res.status(404).json({ success: false, error: 'Device not found' });
+    try {
+        const { deviceId } = req.params;
+        const result = await ClockDevice.deleteOne({ deviceId });
+
+        if (result.deletedCount === 0) {
+            return res.status(404).json({ success: false, error: 'Device not found' });
+        }
+
+        console.log(`[CLOCK] Device deleted: ${deviceId}`);
+        res.json({ success: true, message: 'Device deleted' });
+    } catch (e) {
+        console.error('[CLOCK] Error deleting device:', e);
+        res.status(500).json({ error: e.message });
     }
-    
-    console.log(`[CLOCK] Device deleted: ${deviceId}`);
-    res.json({ success: true, message: 'Device deleted' });
-  } catch (e) {
-    console.error('[CLOCK] Error deleting device:', e);
-    res.status(500).json({ error: e.message });
-  }
 });
 
 //=======================================================
@@ -679,7 +679,7 @@ app.post("/api/study/register", async (req, res) => {
     try {
         let user = await StudyUser.findOne({ email });
         if (user) return res.status(400).json({ error: "User with this email already exists." });
-        
+
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
         const hashedSecurityAnswer = await bcrypt.hash(securityAnswer, salt);
@@ -696,10 +696,10 @@ app.post("/api/study/register", async (req, res) => {
         await newUser.save();
         res.status(201).json({
             message: "User registered successfully!",
-            user: { 
-                id: newUser.id, 
-                username: newUser.username, 
-                email: newUser.email, 
+            user: {
+                id: newUser.id,
+                username: newUser.username,
+                email: newUser.email,
                 settings: newUser.settings,
                 accumulatedStudyTime: newUser.accumulatedStudyTime,
                 unclaimedDrops: newUser.unclaimedDrops
@@ -744,10 +744,10 @@ app.post("/api/study/login", async (req, res) => {
 
         res.status(200).json({
             message: "Login successful!",
-            user: { 
-                id: user.id, 
-                username: user.username, 
-                email: user.email, 
+            user: {
+                id: user.id,
+                username: user.username,
+                email: user.email,
                 settings: user.settings,
                 accumulatedStudyTime: user.accumulatedStudyTime,
                 unclaimedDrops: user.unclaimedDrops
@@ -782,11 +782,11 @@ app.post('/api/study/forgot-password/step2', async (req, res) => {
 
         const isAnswerMatch = await bcrypt.compare(securityAnswer, user.securityAnswer);
         if (!isAnswerMatch) return res.status(400).json({ error: 'Incorrect answer to security question.' });
-        
+
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(newPassword, salt);
         await user.save();
-        
+
         res.status(200).json({ message: 'Password has been reset successfully!' });
     } catch (e) {
         res.status(500).json({ error: "Server error: " + e.message });
@@ -907,7 +907,7 @@ app.post('/api/study/tasks/:id/subtasks', async (req, res) => {
     try {
         const task = await Task.findById(req.params.id);
         if (!task) return res.status(404).json({ error: 'Task not found' });
-        
+
         const newSubTask = { text: req.body.text, completed: false };
         task.subTasks.push(newSubTask);
         await task.save();
@@ -998,7 +998,7 @@ app.put('/api/study/logs', async (req, res) => {
     try {
         const { userId, studyLogs } = req.body;
         console.log(`[BACKEND] Destructured - User ID: ${userId}, Logs: ${JSON.stringify(studyLogs)}`);
-        
+
         if (!userId) {
             console.log('[BACKEND] Error: User ID is missing in the request body.');
             return res.status(400).json({ error: 'User ID is required.' });
@@ -1014,7 +1014,7 @@ app.put('/api/study/logs', async (req, res) => {
 
         if (studyLogs && typeof studyLogs === 'object') {
             console.log('[BACKEND] Clearing old logs and setting new ones.');
-            user.studyLogs.clear(); 
+            user.studyLogs.clear();
             for (const subject in studyLogs) {
                 if (Object.prototype.hasOwnProperty.call(studyLogs, subject)) {
                     user.studyLogs.set(subject, studyLogs[subject]);
@@ -1038,7 +1038,7 @@ app.put('/api/study/logs', async (req, res) => {
                 }
             }
         }
-        
+
         console.log('[BACKEND] Attempting to save user document...');
         await user.save();
         console.log('[BACKEND] User document saved successfully.');
@@ -1064,6 +1064,39 @@ app.put('/api/study/streak', async (req, res) => {
         res.json({ message: 'Streak updated' });
     } catch (e) {
         res.status(400).json({ error: e.message });
+    }
+});
+
+//=======================================================
+// GOOGLE CALENDAR ICAL PROXY ROUTE
+//=======================================================
+app.get('/api/study/calendar/ical-proxy', async (req, res) => {
+    try {
+        const { url } = req.query;
+        if (!url) {
+            return res.status(400).json({ error: 'Missing calendar URL' });
+        }
+        let targetUrl = url.trim();
+        if (targetUrl.startsWith('webcal://')) {
+            targetUrl = 'https://' + targetUrl.slice(9);
+        }
+        if (!targetUrl.startsWith('https://') && !targetUrl.startsWith('http://')) {
+            return res.status(400).json({ error: 'Invalid calendar URL protocol' });
+        }
+
+        const response = await axios.get(targetUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            },
+            timeout: 12000,
+            responseType: 'text'
+        });
+
+        res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.send(response.data);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to fetch calendar feed: ' + e.message });
     }
 });
 
@@ -1205,6 +1238,258 @@ app.delete('/api/study/semesters/:id', async (req, res) => {
     }
 });
 
+//=======================================================
+// SYLLABUS & TOPIC MASTERY ROUTES
+//=======================================================
+
+// GET user's syllabus
+app.get('/api/study/syllabus', async (req, res) => {
+    try {
+        const { userId } = req.query;
+        if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+        const user = await StudyUser.findById(userId);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        res.json({ syllabus: user.syllabus || [] });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Full sync syllabus
+app.put('/api/study/syllabus/sync', async (req, res) => {
+    try {
+        const { userId, syllabus } = req.body;
+        if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+        const user = await StudyUser.findById(userId);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        if (Array.isArray(syllabus)) {
+            user.syllabus = syllabus;
+        }
+
+        await user.save();
+        res.json({ message: 'Syllabus synced successfully', syllabus: user.syllabus });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Add new subject
+app.post('/api/study/syllabus/subject', async (req, res) => {
+    try {
+        const { userId, name, color } = req.body;
+        if (!userId || !name) return res.status(400).json({ error: 'User ID and subject name are required' });
+
+        const user = await StudyUser.findById(userId);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        if (!user.syllabus) user.syllabus = [];
+
+        const newSubject = {
+            id: 'subj_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+            name: name.trim(),
+            color: color || '#00B4D8',
+            order: user.syllabus.length,
+            chapters: []
+        };
+
+        user.syllabus.push(newSubject);
+        await user.save();
+
+        res.json({ message: 'Subject created successfully', subject: newSubject, syllabus: user.syllabus });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Update subject
+app.put('/api/study/syllabus/subject/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { userId, name, color, order } = req.body;
+        if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+        const user = await StudyUser.findById(userId);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        const subject = (user.syllabus || []).find(s => s.id === id);
+        if (!subject) return res.status(404).json({ error: 'Subject not found' });
+
+        if (name !== undefined) subject.name = name.trim();
+        if (color !== undefined) subject.color = color;
+        if (order !== undefined) subject.order = order;
+
+        await user.save();
+        res.json({ message: 'Subject updated successfully', subject, syllabus: user.syllabus });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Delete subject
+app.delete('/api/study/syllabus/subject/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.query.userId || req.body.userId;
+        if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+        const user = await StudyUser.findById(userId);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        user.syllabus = (user.syllabus || []).filter(s => s.id !== id);
+        user.syllabus.forEach((s, idx) => { s.order = idx; });
+
+        await user.save();
+        res.json({ message: 'Subject deleted successfully', syllabus: user.syllabus });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Add chapter to subject
+app.post('/api/study/syllabus/subject/:subjectId/chapter', async (req, res) => {
+    try {
+        const { subjectId } = req.params;
+        const { userId, name, notes, status } = req.body;
+        if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+        const user = await StudyUser.findById(userId);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        const subject = (user.syllabus || []).find(s => s.id === subjectId);
+        if (!subject) return res.status(404).json({ error: 'Subject not found' });
+
+        if (!subject.chapters) subject.chapters = [];
+
+        const newChapter = {
+            id: 'chap_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+            name: (name || '').trim(),
+            notes: (notes || '').trim(),
+            status: status || 'not_started',
+            order: subject.chapters.length
+        };
+
+        subject.chapters.push(newChapter);
+        await user.save();
+
+        res.json({ message: 'Chapter added successfully', chapter: newChapter, syllabus: user.syllabus });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Update chapter
+app.put('/api/study/syllabus/subject/:subjectId/chapter/:chapterId', async (req, res) => {
+    try {
+        const { subjectId, chapterId } = req.params;
+        const { userId, name, notes, status, order } = req.body;
+        if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+        const user = await StudyUser.findById(userId);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        const subject = (user.syllabus || []).find(s => s.id === subjectId);
+        if (!subject) return res.status(404).json({ error: 'Subject not found' });
+
+        const chapter = (subject.chapters || []).find(c => c.id === chapterId);
+        if (!chapter) return res.status(404).json({ error: 'Chapter not found' });
+
+        if (name !== undefined) chapter.name = name.trim();
+        if (notes !== undefined) chapter.notes = notes.trim();
+        if (status !== undefined) chapter.status = status;
+        if (order !== undefined) chapter.order = order;
+
+        await user.save();
+        res.json({ message: 'Chapter updated successfully', chapter, syllabus: user.syllabus });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Delete chapter
+app.delete('/api/study/syllabus/subject/:subjectId/chapter/:chapterId', async (req, res) => {
+    try {
+        const { subjectId, chapterId } = req.params;
+        const userId = req.query.userId || req.body.userId;
+        if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+        const user = await StudyUser.findById(userId);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        const subject = (user.syllabus || []).find(s => s.id === subjectId);
+        if (!subject) return res.status(404).json({ error: 'Subject not found' });
+
+        subject.chapters = (subject.chapters || []).filter(c => c.id !== chapterId);
+        subject.chapters.forEach((c, idx) => { c.order = idx; });
+
+        await user.save();
+        res.json({ message: 'Chapter deleted successfully', syllabus: user.syllabus });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Reorder subjects or chapters
+app.put('/api/study/syllabus/reorder', async (req, res) => {
+    try {
+        const { userId, type, subjectId, orderedIds } = req.body;
+        if (!userId || !type || !Array.isArray(orderedIds)) {
+            return res.status(400).json({ error: 'userId, type, and orderedIds are required' });
+        }
+
+        const user = await StudyUser.findById(userId);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        if (type === 'subjects') {
+            const subjectMap = new Map((user.syllabus || []).map(s => [s.id, s]));
+            const reordered = [];
+            orderedIds.forEach((id, idx) => {
+                const s = subjectMap.get(id);
+                if (s) {
+                    s.order = idx;
+                    reordered.push(s);
+                }
+            });
+            // Append any unlisted subjects
+            user.syllabus.forEach(s => {
+                if (!orderedIds.includes(s.id)) {
+                    s.order = reordered.length;
+                    reordered.push(s);
+                }
+            });
+            user.syllabus = reordered;
+        } else if (type === 'chapters' && subjectId) {
+            const subject = (user.syllabus || []).find(s => s.id === subjectId);
+            if (!subject) return res.status(404).json({ error: 'Subject not found' });
+
+            const chapterMap = new Map((subject.chapters || []).map(c => [c.id, c]));
+            const reordered = [];
+            orderedIds.forEach((id, idx) => {
+                const c = chapterMap.get(id);
+                if (c) {
+                    c.order = idx;
+                    reordered.push(c);
+                }
+            });
+            subject.chapters.forEach(c => {
+                if (!orderedIds.includes(c.id)) {
+                    c.order = reordered.length;
+                    reordered.push(c);
+                }
+            });
+            subject.chapters = reordered;
+        }
+
+        await user.save();
+        res.json({ message: 'Reordered successfully', syllabus: user.syllabus });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // ==========================================
 // SOUND LIBRARY ROUTES
 // ==========================================
@@ -1227,7 +1512,7 @@ app.post('/api/study/sound-library/add', async (req, res) => {
     try {
         const { userId, name, url } = req.body;
         if (!name || !name.trim() || !url || !url.trim()) {
-             return res.status(400).json({ error: 'Name and URL cannot be empty.' });
+            return res.status(400).json({ error: 'Name and URL cannot be empty.' });
         }
         const user = await StudyUser.findById(userId);
         if (!user) {
@@ -1264,7 +1549,7 @@ app.put('/api/study/sound-library/edit/:soundId', async (req, res) => {
         const { userId, name, url } = req.body;
         const { soundId } = req.params;
         if (!name || !name.trim() || !url || !url.trim()) {
-             return res.status(400).json({ error: 'Name and URL cannot be empty.' });
+            return res.status(400).json({ error: 'Name and URL cannot be empty.' });
         }
         const user = await StudyUser.findById(userId);
         if (!user) {
@@ -1447,7 +1732,7 @@ app.put('/api/study/flashcard-sets/:setId/cards/:cardId', async (req, res) => {
 
         card.front = front || card.front;
         card.back = back || card.back;
-        
+
         await set.save();
         res.json(set);
     } catch (e) {
@@ -1462,7 +1747,7 @@ app.delete('/api/study/flashcard-sets/:setId/cards/:cardId', async (req, res) =>
         if (!set) return res.status(404).json({ error: 'Flashcard set not found.' });
 
         set.flashcards.pull({ _id: req.params.cardId });
-        
+
         await set.save();
         res.json(set);
     } catch (e) {
@@ -1476,7 +1761,7 @@ app.put('/api/study/flashcard-sets/:setId/reorder-cards', async (req, res) => {
         if (!set) {
             return res.status(404).json({ error: 'Set not found' });
         }
-        
+
         const { orderedIds } = req.body;
         if (!orderedIds || !Array.isArray(orderedIds)) {
             return res.status(400).json({ error: 'Invalid data format' });
@@ -1484,7 +1769,7 @@ app.put('/api/study/flashcard-sets/:setId/reorder-cards', async (req, res) => {
 
         // Create a map for efficient lookup
         const cardMap = new Map(set.flashcards.map(card => [card._id.toString(), card]));
-        
+
         // Build the new flashcards array based on the received order
         const reorderedFlashcards = orderedIds.map(id => cardMap.get(id)).filter(Boolean); // filter(Boolean) removes any undefined entries if an ID was invalid
 
@@ -1627,12 +1912,12 @@ app.post('/api/admin/base-items/:baseItemId/batch-models', async (req, res) => {
         // Prepare models for insertion, ensuring the correct baseItemId is set
         const modelsToInsert = models.map(model => ({
             ...model,
-            baseItemId: baseItemId 
+            baseItemId: baseItemId
         }));
 
         // Insert all new models into the database
         const createdModels = await ItemModel.insertMany(modelsToInsert, { ordered: false });
-        
+
         // Group the new model IDs by rarity to update the parent
         const rarityGroups = {};
         createdModels.forEach(model => {
@@ -1647,7 +1932,7 @@ app.post('/api/admin/base-items/:baseItemId/batch-models', async (req, res) => {
         for (const rarity in rarityGroups) {
             updateOperation[`rarityPools.${rarity}`] = { $each: rarityGroups[rarity] };
         }
-        
+
         await BaseItem.findByIdAndUpdate(baseItemId, {
             $push: updateOperation
         });
@@ -1657,7 +1942,7 @@ app.post('/api/admin/base-items/:baseItemId/batch-models', async (req, res) => {
     } catch (e) {
         // Handle potential duplicate key errors from modelId, which is a common import issue
         if (e.code === 11000) {
-             return res.status(400).json({ error: `Duplicate modelId found. All modelIds must be unique. Details: ${e.message}` });
+            return res.status(400).json({ error: `Duplicate modelId found. All modelIds must be unique. Details: ${e.message}` });
         }
         res.status(500).json({ error: e.message });
     }
@@ -1779,7 +2064,8 @@ app.get('/api/study/user/collectible-state', async (req, res) => {
             },
             studyLogs: new Map(),
             studyStreak: 0,
-            lastStudyDay: ''
+            lastStudyDay: '',
+            syllabus: []
         };
 
         // Check and add missing fields with defaults
@@ -1801,19 +2087,19 @@ app.get('/api/study/user/collectible-state', async (req, res) => {
         } else if (user.settings.darkMode === undefined) {
             user.settings.darkMode = false;
             needsSave = true;
-        }       
-        
+        }
+
         // Save to database if any fields were added
         try {
-        if (needsSave) {
-          await user.save();
-          console.log(`Migration: Saved updated fields for user ${userId}`);
-        }
+            if (needsSave) {
+                await user.save();
+                console.log(`Migration: Saved updated fields for user ${userId}`);
+            }
         } catch (saveError) {
-          console.error(`Failed to save user ${userId} after migration:`, saveError);
-          return res.status(500).json({ error: "Failed to save user after migration", details: saveError.message });
+            console.error(`Failed to save user ${userId} after migration:`, saveError);
+            return res.status(500).json({ error: "Failed to save user after migration", details: saveError.message });
         }
-        
+
         res.json({
             accumulatedStudyTime: user.accumulatedStudyTime || 0,
             unclaimedDrops: user.unclaimedDrops || 0,
@@ -1823,7 +2109,8 @@ app.get('/api/study/user/collectible-state', async (req, res) => {
             settings: user.settings || defaultValues.settings,
             studyLogs: user.studyLogs || new Map(),
             studyStreak: user.studyStreak || 0,
-            lastStudyDay: user.lastStudyDay || ''
+            lastStudyDay: user.lastStudyDay || '',
+            syllabus: user.syllabus || []
         });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -1833,13 +2120,13 @@ app.get('/api/study/user/collectible-state', async (req, res) => {
 app.put('/api/study/user/collectible-state', async (req, res) => {
     try {
         const { userId } = req.query;
-        
+
         if (!userId) {
             return res.status(400).json({ error: 'User ID is required' });
         }
 
         const user = await StudyUser.findById(userId);
-        
+
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
@@ -1905,7 +2192,7 @@ app.post('/api/collectibles/generate-drop', async (req, res) => {
             };
             choices.push(cardData);
         }
-        
+
         // 3. Save the newly generated choices to the user's profile.
         user.pendingDrops.push(choices);
         await user.save();
@@ -1941,7 +2228,7 @@ app.post('/api/collectibles/claim-card', async (req, res) => {
                 );
                 chosenCard.generatedStats.serialNumber = `${updatedModel.limitedEdition.mintedCount}/${updatedModel.limitedEdition.maxSerial}`;
             } else {
-                 chosenCard.generatedStats.serialNumber = `SOLD OUT`;
+                chosenCard.generatedStats.serialNumber = `SOLD OUT`;
             }
         }
 
@@ -1956,7 +2243,7 @@ app.post('/api/collectibles/claim-card', async (req, res) => {
         user.inventory.push(newCollectedItem._id);
         // --- THIS IS THE FIX ---
         // Remove the set of choices that was just used.
-        user.pendingDrops.shift(); 
+        user.pendingDrops.shift();
         // --- END OF FIX ---
         await user.save();
 
@@ -1977,7 +2264,7 @@ app.get('/api/collectibles/inventory', async (req, res) => {
         if (!userId) {
             return res.status(400).json({ error: 'User ID is required.' });
         }
-        
+
         const user = await StudyUser.findById(userId).populate({
             path: 'inventory', // Populate the 'inventory' array in the StudyUser model
             populate: {
@@ -2003,7 +2290,7 @@ app.get('/api/collectibles/inventory', async (req, res) => {
 // POST: Create a new timeline
 app.post("/api/study/timelines", async (req, res) => {
     const { name, description, userId } = req.body;
-    
+
     if (!name || !userId) {
         return res.status(400).json({ error: "Timeline name and User ID are required." });
     }
@@ -2054,7 +2341,7 @@ app.get("/api/study/timelines/:id", async (req, res) => {
     try {
         // Find by ID, and sort the events by date (oldest first)
         const timeline = await Timeline.findById(req.params.id);
-        
+
         if (!timeline) {
             return res.status(404).json({ error: "Timeline not found." });
         }
@@ -2072,7 +2359,7 @@ app.get("/api/study/timelines/:id", async (req, res) => {
 app.delete("/api/study/timelines/:id", async (req, res) => {
     try {
         const result = await Timeline.findByIdAndDelete(req.params.id);
-        
+
         if (!result) {
             return res.status(404).json({ error: "Timeline not found." });
         }
@@ -2084,7 +2371,7 @@ app.delete("/api/study/timelines/:id", async (req, res) => {
 
 app.patch("/api/study/timelines/:timelineId", async (req, res) => {
     const { name, description } = req.body;
-    
+
     // Check if at least one field is provided
     if (name === undefined && description === undefined) {
         return res.status(400).json({ error: "At least 'name' or 'description' must be provided for update." });
@@ -2131,9 +2418,9 @@ app.post("/api/study/timelines/:timelineId/events", async (req, res) => {
         if (!title || !startDate) {
             return res.status(400).json({ error: "Title and Start Date are required." });
         }
-        
+
         if (endDate && new Date(endDate) < new Date(startDate)) {
-             return res.status(400).json({ error: "End Date cannot be before Start Date." });
+            return res.status(400).json({ error: "End Date cannot be before Start Date." });
         }
 
         const timeline = await Timeline.findById(req.params.timelineId);
@@ -2147,18 +2434,18 @@ app.post("/api/study/timelines/:timelineId/events", async (req, res) => {
             details: details || '',
             startDate: new Date(startDate),
             // Set endDate only if it's provided, otherwise it defaults to null (from schema)
-            endDate: endDate ? new Date(endDate) : null 
+            endDate: endDate ? new Date(endDate) : null
         };
 
         timeline.events.push(newEvent);
         await timeline.save();
-        
+
         // Get the newly created event (it's the last one in the array)
         const addedEvent = timeline.events[timeline.events.length - 1];
 
         res.status(201).json({
             message: "Event added successfully!",
-            event: addedEvent 
+            event: addedEvent
         });
 
     } catch (e) {
@@ -2172,16 +2459,16 @@ app.put("/api/study/timelines/:timelineId/events/:eventId", async (req, res) => 
     try {
         // UPDATED: Destructure new fields
         const { title, details, startDate, endDate } = req.body;
-        
+
         if (endDate && startDate && new Date(endDate) < new Date(startDate)) {
-             return res.status(400).json({ error: "End Date cannot be before Start Date." });
+            return res.status(400).json({ error: "End Date cannot be before Start Date." });
         }
 
         const timeline = await Timeline.findById(req.params.timelineId);
         if (!timeline) {
             return res.status(404).json({ error: "Timeline not found." });
         }
-        
+
         const event = timeline.events.id(req.params.eventId);
         if (!event) {
             return res.status(404).json({ error: "Event not found." });
@@ -2191,7 +2478,7 @@ app.put("/api/study/timelines/:timelineId/events/:eventId", async (req, res) => 
         if (startDate) event.startDate = new Date(startDate);
         if (title) event.title = title;
         if (details !== undefined) event.details = details;
-        
+
         // UPDATED: Handle endDate (add, change, or remove)
         // Check for explicit null to allow removing an end date
         if (endDate === null) {
@@ -2229,10 +2516,10 @@ app.delete("/api/study/timelines/:timelineId/events/:eventId", async (req, res) 
         // Find the event and remove it
         const event = timeline.events.id(req.params.eventId);
         if (!event) {
-             return res.status(404).json({ error: "Event not found." });
+            return res.status(404).json({ error: "Event not found." });
         }
         event.deleteOne(); // Use deleteOne on the subdocument
-        
+
         await timeline.save();
 
         res.status(200).json({ message: "Event deleted successfully." });
@@ -2253,7 +2540,7 @@ app.post("/api/study/etymology-log", async (req, res) => {
         if (!userId || !word) {
             return res.status(400).json({ error: "User ID and Word are required." });
         }
-        
+
         // Check for duplicate
         const existingWord = await EtymologyWord.findOne({ userId, word });
         if (existingWord) {
@@ -2276,7 +2563,7 @@ app.get("/api/study/etymology-log", async (req, res) => {
         if (!userId) {
             return res.status(400).json({ error: "User ID is required." });
         }
-        
+
         // Find all words for the user, sort alphabetically by the 'word' field
         const words = await EtymologyWord.find({ userId }).sort({ word: 1 });
         res.json(words);
@@ -2292,9 +2579,9 @@ app.get("/api/study/etymology-log/:id", async (req, res) => {
         if (!word) {
             return res.status(404).json({ error: "Word entry not found." });
         }
-        
+
         // Optional: Add a check here to ensure word.userId matches the logged-in user
-        
+
         res.json(word);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -2306,19 +2593,19 @@ app.put("/api/study/etymology-log/:id", async (req, res) => {
     try {
         // Exclude userId from the update body to prevent changing ownership
         const { userId, ...updateData } = req.body;
-        
+
         const updatedWord = await EtymologyWord.findByIdAndUpdate(
             req.params.id,
             updateData,
             { new: true, runValidators: true } // new: true returns the updated doc
         );
-        
+
         if (!updatedWord) {
             return res.status(44).json({ error: "Word entry not found." });
         }
-        
+
         // Optional: Add a check here to ensure word.userId matches the logged-in user
-        
+
         res.json(updatedWord);
     } catch (e) {
         res.status(400).json({ error: e.message });
@@ -2329,13 +2616,13 @@ app.put("/api/study/etymology-log/:id", async (req, res) => {
 app.delete("/api/study/etymology-log/:id", async (req, res) => {
     try {
         const deletedWord = await EtymologyWord.findByIdAndDelete(req.params.id);
-        
+
         if (!deletedWord) {
             return res.status(44).json({ error: "Word entry not found." });
         }
-        
+
         // Optional: Add a check here to ensure word.userId matches the logged-in user
-        
+
         res.json({ message: "Word entry deleted successfully." });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -2366,7 +2653,7 @@ app.get('/api/history/entity/:slug', async (req, res) => {
     try {
         const entity = await HistoryEntity.findOne({ slug: req.params.slug })
             .populate('connections.target', 'title slug type'); // Hydrate links
-            
+
         if (!entity) return res.status(404).json({ message: "Page not found" });
         res.json(entity);
     } catch (err) {
@@ -2381,17 +2668,17 @@ app.post('/api/history/entity', async (req, res) => {
         // Added dateDisplay, location, takeaway to destructuring
         const { title, type, content, summary, era, year, connections, dateDisplay, location, takeaway } = req.body;
         const slug = createSlug(title);
-        
+
         const updatedEntity = await HistoryEntity.findOneAndUpdate(
             { slug: slug },
-            { 
-                title, 
-                slug, 
-                type, 
-                content, 
-                summary, 
-                era, 
-                year, 
+            {
+                title,
+                slug,
+                type,
+                content,
+                summary,
+                era,
+                year,
                 connections,
                 dateDisplay, // Added
                 location,    // Added
@@ -2399,7 +2686,7 @@ app.post('/api/history/entity', async (req, res) => {
             },
             { new: true, upsert: true, setDefaultsOnInsert: true }
         );
-        
+
         res.json(updatedEntity);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -2414,9 +2701,9 @@ app.get('/api/history/search', async (req, res) => {
             { $text: { $search: q } },
             { score: { $meta: "textScore" } }
         )
-        .sort({ score: { $meta: "textScore" } })
-        .limit(10);
-        
+            .sort({ score: { $meta: "textScore" } })
+            .limit(10);
+
         res.json(results);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -2427,7 +2714,7 @@ app.delete('/api/history/entity/:slug', async (req, res) => {
     try {
         const { slug } = req.params;
         const result = await HistoryEntity.findOneAndDelete({ slug });
-        
+
         if (!result) {
             return res.status(404).json({ error: "Entity not found" });
         }
@@ -2460,15 +2747,15 @@ app.use('/api/motifs', motifsRouter);
 app.use(notFound);
 app.use(errorHandler);
 
-const start = async() => {
-  try{
-    await mongoose.connect(CONNECTION);
-    app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
-    });
-  } catch (e) {
-    console.log(e.message);
-  }
+const start = async () => {
+    try {
+        await mongoose.connect(CONNECTION);
+        app.listen(PORT, () => {
+            console.log(`Server is running on port ${PORT}`);
+        });
+    } catch (e) {
+        console.log(e.message);
+    }
 };
 
 start();

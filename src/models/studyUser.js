@@ -100,7 +100,25 @@ const studyUserSchema = new mongoose.Schema({
     activeSemesterId: {
         type: String,
         default: ''
-    }
+    },
+    syllabus: [{
+        id: { type: String, required: true },
+        name: { type: String, required: true },
+        color: { type: String, default: '#00B4D8' },
+        order: { type: Number, default: 0 },
+        chapters: [{
+            id: { type: String, required: true },
+            name: { type: String, default: '' },
+            notes: { type: String, default: '' },
+            status: {
+                type: String,
+                enum: ['not_started', 'in_progress', 'review_required', 'mastered'],
+                default: 'not_started'
+            },
+            order: { type: Number, default: 0 }
+        }],
+        createdAt: { type: Date, default: Date.now }
+    }]
 });
 
 module.exports = mongoose.model('StudyUser', studyUserSchema);
