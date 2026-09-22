@@ -115,8 +115,37 @@ const studyUserSchema = new mongoose.Schema({
                 enum: ['not_started', 'in_progress', 'review_required', 'mastered'],
                 default: 'not_started'
             },
-            order: { type: Number, default: 0 }
+            order: { type: Number, default: 0 },
+            subchapters: [{
+                id: { type: String, required: true },
+                name: { type: String, default: '' },
+                notes: { type: String, default: '' },
+                status: {
+                    type: String,
+                    enum: ['not_started', 'in_progress', 'review_required', 'mastered'],
+                    default: 'not_started'
+                },
+                order: { type: Number, default: 0 }
+            }]
         }],
+        createdAt: { type: Date, default: Date.now }
+    }],
+    studySessions: [{
+        id: { type: String, required: true },
+        startTime: { type: Date, required: true },
+        endTime: { type: Date, required: true },
+        durationSeconds: { type: Number, required: true },
+        subject: { type: String, required: true },
+        mode: { type: String, enum: ['pomodoro', 'stopwatch'], default: 'pomodoro' },
+        semesterId: { type: String, default: '' },
+        linkedItem: {
+            itemType: { type: String, default: 'none' },
+            itemId: { type: String, default: '' },
+            subId: { type: String, default: '' },
+            title: { type: String, default: '' },
+            parentTitle: { type: String, default: '' },
+            displayText: { type: String, default: '' }
+        },
         createdAt: { type: Date, default: Date.now }
     }]
 });

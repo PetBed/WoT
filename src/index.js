@@ -20,6 +20,7 @@ const PostBoard = require('../src/models/Post Board/post');
 const StudyUser = require('../src/models/studyUser');
 const Task = require('../src/models/task'); // Task model for the study app
 const FlashcardSet = require('../src/models/flashcardSet');
+const Notebook = require('../src/models/notebook');
 
 // Collectible Models
 const BaseItem = require('../src/models/collectible/baseItem');
@@ -1068,6 +1069,98 @@ app.put('/api/study/streak', async (req, res) => {
 });
 
 //=======================================================
+// Study Session History API
+//=======================================================
+app.get('/api/study/sessions', async (req, res) => {
+    try {
+        const { userId } = req.query;
+        if (!userId) {
+            return res.status(400).json({ error: 'User ID is required' });
+        }
+        const user = await StudyUser.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        const sessions = Array.isArray(user.studySessions) ? user.studySessions : [];
+        sessions.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+        res.json({ sessions });
+    } catch (e) {
+        console.error('[BACKEND] Error fetching study sessions:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/study/sessions', async (req, res) => {
+    try {
+        const { userId, session } = req.body;
+        if (!userId || !session) {
+            return res.status(400).json({ error: 'User ID and session object are required' });
+        }
+        const user = await StudyUser.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        if (!Array.isArray(user.studySessions)) {
+            user.studySessions = [];
+        }
+
+        const sessionRecord = {
+            id: session.id || `sess_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+            startTime: session.startTime ? new Date(session.startTime) : new Date(),
+            endTime: session.endTime ? new Date(session.endTime) : new Date(),
+            durationSeconds: Math.max(0, Number(session.durationSeconds) || 0),
+            subject: String(session.subject || 'General').trim(),
+            mode: session.mode === 'stopwatch' ? 'stopwatch' : 'pomodoro',
+            semesterId: session.semesterId || user.activeSemesterId || '',
+            linkedItem: session.linkedItem || {
+                itemType: 'none',
+                itemId: '',
+                subId: '',
+                title: '',
+                parentTitle: '',
+                displayText: ''
+            },
+            createdAt: new Date()
+        };
+
+        user.studySessions.push(sessionRecord);
+
+        if (user.studySessions.length > 1000) {
+            user.studySessions.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+            user.studySessions = user.studySessions.slice(0, 1000);
+        }
+
+        await user.save();
+        res.json({ message: 'Session logged successfully', session: sessionRecord });
+    } catch (e) {
+        console.error('[BACKEND] Error saving study session:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/api/study/sessions/:sessionId', async (req, res) => {
+    try {
+        const { userId } = req.query;
+        const { sessionId } = req.params;
+        if (!userId || !sessionId) {
+            return res.status(400).json({ error: 'User ID and session ID are required' });
+        }
+        const user = await StudyUser.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        if (Array.isArray(user.studySessions)) {
+            user.studySessions = user.studySessions.filter(s => s.id !== sessionId);
+            await user.save();
+        }
+        res.json({ message: 'Session deleted successfully' });
+    } catch (e) {
+        console.error('[BACKEND] Error deleting study session:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+//=======================================================
 // GOOGLE CALENDAR ICAL PROXY ROUTE
 //=======================================================
 app.get('/api/study/calendar/ical-proxy', async (req, res) => {
@@ -1432,10 +1525,102 @@ app.delete('/api/study/syllabus/subject/:subjectId/chapter/:chapterId', async (r
     }
 });
 
-// Reorder subjects or chapters
+// Add subchapter to chapter
+app.post('/api/study/syllabus/subject/:subjectId/chapter/:chapterId/subchapter', async (req, res) => {
+    try {
+        const { subjectId, chapterId } = req.params;
+        const { userId, name, notes, status } = req.body;
+        if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+        const user = await StudyUser.findById(userId);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        const subject = (user.syllabus || []).find(s => s.id === subjectId);
+        if (!subject) return res.status(404).json({ error: 'Subject not found' });
+
+        const chapter = (subject.chapters || []).find(c => c.id === chapterId);
+        if (!chapter) return res.status(404).json({ error: 'Chapter not found' });
+
+        if (!chapter.subchapters) chapter.subchapters = [];
+
+        const newSubchapter = {
+            id: 'subchap_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+            name: (name || '').trim(),
+            notes: (notes || '').trim(),
+            status: status || 'not_started',
+            order: chapter.subchapters.length
+        };
+
+        chapter.subchapters.push(newSubchapter);
+        await user.save();
+
+        res.json({ message: 'Subchapter added successfully', subchapter: newSubchapter, syllabus: user.syllabus });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Update subchapter
+app.put('/api/study/syllabus/subject/:subjectId/chapter/:chapterId/subchapter/:subchapterId', async (req, res) => {
+    try {
+        const { subjectId, chapterId, subchapterId } = req.params;
+        const { userId, name, notes, status, order } = req.body;
+        if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+        const user = await StudyUser.findById(userId);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        const subject = (user.syllabus || []).find(s => s.id === subjectId);
+        if (!subject) return res.status(404).json({ error: 'Subject not found' });
+
+        const chapter = (subject.chapters || []).find(c => c.id === chapterId);
+        if (!chapter) return res.status(404).json({ error: 'Chapter not found' });
+
+        const subchapter = (chapter.subchapters || []).find(sc => sc.id === subchapterId);
+        if (!subchapter) return res.status(404).json({ error: 'Subchapter not found' });
+
+        if (name !== undefined) subchapter.name = name.trim();
+        if (notes !== undefined) subchapter.notes = notes.trim();
+        if (status !== undefined) subchapter.status = status;
+        if (order !== undefined) subchapter.order = order;
+
+        await user.save();
+        res.json({ message: 'Subchapter updated successfully', subchapter, syllabus: user.syllabus });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Delete subchapter
+app.delete('/api/study/syllabus/subject/:subjectId/chapter/:chapterId/subchapter/:subchapterId', async (req, res) => {
+    try {
+        const { subjectId, chapterId, subchapterId } = req.params;
+        const userId = req.query.userId || req.body.userId;
+        if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+        const user = await StudyUser.findById(userId);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        const subject = (user.syllabus || []).find(s => s.id === subjectId);
+        if (!subject) return res.status(404).json({ error: 'Subject not found' });
+
+        const chapter = (subject.chapters || []).find(c => c.id === chapterId);
+        if (!chapter) return res.status(404).json({ error: 'Chapter not found' });
+
+        chapter.subchapters = (chapter.subchapters || []).filter(sc => sc.id !== subchapterId);
+        chapter.subchapters.forEach((sc, idx) => { sc.order = idx; });
+
+        await user.save();
+        res.json({ message: 'Subchapter deleted successfully', syllabus: user.syllabus });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Reorder subjects, chapters, or subchapters
 app.put('/api/study/syllabus/reorder', async (req, res) => {
     try {
-        const { userId, type, subjectId, orderedIds } = req.body;
+        const { userId, type, subjectId, chapterId, orderedIds } = req.body;
         if (!userId || !type || !Array.isArray(orderedIds)) {
             return res.status(400).json({ error: 'userId, type, and orderedIds are required' });
         }
@@ -1481,6 +1666,29 @@ app.put('/api/study/syllabus/reorder', async (req, res) => {
                 }
             });
             subject.chapters = reordered;
+        } else if (type === 'subchapters' && subjectId && chapterId) {
+            const subject = (user.syllabus || []).find(s => s.id === subjectId);
+            if (!subject) return res.status(404).json({ error: 'Subject not found' });
+
+            const chapter = (subject.chapters || []).find(c => c.id === chapterId);
+            if (!chapter) return res.status(404).json({ error: 'Chapter not found' });
+
+            const subMap = new Map((chapter.subchapters || []).map(sc => [sc.id, sc]));
+            const reordered = [];
+            orderedIds.forEach((id, idx) => {
+                const sc = subMap.get(id);
+                if (sc) {
+                    sc.order = idx;
+                    reordered.push(sc);
+                }
+            });
+            (chapter.subchapters || []).forEach(sc => {
+                if (!orderedIds.includes(sc.id)) {
+                    sc.order = reordered.length;
+                    reordered.push(sc);
+                }
+            });
+            chapter.subchapters = reordered;
         }
 
         await user.save();
@@ -1780,6 +1988,269 @@ app.put('/api/study/flashcard-sets/:setId/reorder-cards', async (req, res) => {
         set.flashcards = reorderedFlashcards;
         await set.save();
         res.json(set);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ==========================================
+// STUDY APP - NOTEBOOKS & NOTES API
+// ==========================================
+
+// --- Notebooks API ---
+
+// GET all notebooks for user (with note count per notebook)
+app.get('/api/study/notebooks', async (req, res) => {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
+
+    try {
+        const notebooks = await Notebook.find({ userId }).sort({ order: 1, createdAt: 1 }).lean();
+        
+        // Count notes in each notebook
+        const notebooksWithCounts = await Promise.all(
+            notebooks.map(async (nb) => {
+                const noteCount = await Note.countDocuments({
+                    $or: [{ userId }, { user: userId }],
+                    notebookId: nb._id
+                });
+                return { ...nb, noteCount };
+            })
+        );
+
+        // Also calculate unfiled notes count
+        const unfiledCount = await Note.countDocuments({
+            $or: [{ userId }, { user: userId }],
+            $or: [{ notebookId: null }, { notebookId: { $exists: false } }]
+        });
+
+        const totalNotesCount = await Note.countDocuments({
+            $or: [{ userId }, { user: userId }]
+        });
+
+        res.json({
+            notebooks: notebooksWithCounts,
+            unfiledCount,
+            totalNotesCount
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST create notebook
+app.post('/api/study/notebooks', async (req, res) => {
+    const { name, description, color, userId } = req.body;
+    if (!name || !userId) {
+        return res.status(400).json({ error: 'name and userId are required' });
+    }
+
+    try {
+        const count = await Notebook.countDocuments({ userId });
+        const notebook = new Notebook({
+            name: name.trim(),
+            description: (description || '').trim(),
+            color: color || '#3b82f6',
+            userId,
+            order: count
+        });
+        await notebook.save();
+        res.status(201).json({ notebook: { ...notebook.toObject(), noteCount: 0 } });
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+// PUT update notebook
+app.put('/api/study/notebooks/:notebookId', async (req, res) => {
+    const { notebookId } = req.params;
+    const { name, description, color, order } = req.body;
+
+    try {
+        const notebook = await Notebook.findById(notebookId);
+        if (!notebook) return res.status(404).json({ error: 'Notebook not found' });
+
+        if (name !== undefined) notebook.name = name.trim();
+        if (description !== undefined) notebook.description = description.trim();
+        if (color !== undefined) notebook.color = color;
+        if (order !== undefined) notebook.order = order;
+
+        await notebook.save();
+        res.json({ notebook });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// DELETE notebook
+app.delete('/api/study/notebooks/:notebookId', async (req, res) => {
+    const { notebookId } = req.params;
+
+    try {
+        const result = await Notebook.deleteOne({ _id: notebookId });
+        // Move all notes in this notebook to unfiled (notebookId: null)
+        await Note.updateMany({ notebookId }, { $set: { notebookId: null } });
+        res.json({ success: true, deletedCount: result.deletedCount });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// --- Notes API ---
+
+// GET all notes for user with optional filters
+app.get('/api/study/notes', async (req, res) => {
+    const { userId, notebookId, subject, tag, search } = req.query;
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
+
+    try {
+        const conditions = [
+            { $or: [{ userId }, { user: userId }] }
+        ];
+
+        if (notebookId === 'unfiled') {
+            conditions.push({
+                $or: [
+                    { notebookId: null },
+                    { notebookId: { $exists: false } }
+                ]
+            });
+        } else if (notebookId && notebookId !== 'all') {
+            conditions.push({ notebookId });
+        }
+
+        if (subject && subject !== 'all') {
+            conditions.push({ subject });
+        }
+
+        if (tag && tag !== 'all') {
+            conditions.push({ tags: tag });
+        }
+
+        if (search && search.trim()) {
+            const regex = new RegExp(search.trim(), 'i');
+            conditions.push({
+                $or: [
+                    { title: regex },
+                    { content: regex },
+                    { tags: regex },
+                    { aliases: regex }
+                ]
+            });
+        }
+
+        const query = conditions.length > 1 ? { $and: conditions } : conditions[0];
+
+        const notes = await Note.find(query)
+            .populate('notebookId', 'name color')
+            .sort({ isPinned: -1, updatedAt: -1 })
+            .lean();
+
+        res.json({ notes });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// GET single note
+app.get('/api/study/notes/:noteId', async (req, res) => {
+    const { noteId } = req.params;
+    try {
+        const note = await Note.findById(noteId).populate('notebookId', 'name color');
+        if (!note) return res.status(404).json({ error: 'Note not found' });
+        res.json({ note });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST create note
+app.post('/api/study/notes', async (req, res) => {
+    const { title, content, userId, notebookId, subject, tags, aliases, isPinned } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
+
+    try {
+        const note = new Note({
+            title: (title || 'Untitled Note').trim(),
+            content: content || '',
+            userId,
+            notebookId: notebookId || null,
+            subject: subject || 'Other',
+            tags: Array.isArray(tags) ? tags : [],
+            aliases: Array.isArray(aliases) ? aliases : [],
+            isPinned: Boolean(isPinned)
+        });
+
+        await note.save();
+        const populatedNote = await Note.findById(note._id).populate('notebookId', 'name color');
+        res.status(201).json({ note: populatedNote });
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+// PUT update note
+app.put('/api/study/notes/:noteId', async (req, res) => {
+    const { noteId } = req.params;
+    const { title, content, notebookId, subject, tags, aliases, isPinned, order } = req.body;
+
+    try {
+        const note = await Note.findById(noteId);
+        if (!note) return res.status(404).json({ error: 'Note not found' });
+
+        if (title !== undefined) note.title = title.trim() || 'Untitled Note';
+        if (content !== undefined) note.content = content;
+        if (notebookId !== undefined) note.notebookId = notebookId || null;
+        if (subject !== undefined) note.subject = subject || 'Other';
+        if (tags !== undefined) note.tags = Array.isArray(tags) ? tags : [];
+        if (aliases !== undefined) note.aliases = Array.isArray(aliases) ? aliases : [];
+        if (isPinned !== undefined) note.isPinned = Boolean(isPinned);
+        if (order !== undefined) note.order = order;
+
+        await note.save();
+        const populatedNote = await Note.findById(note._id).populate('notebookId', 'name color');
+        res.json({ note: populatedNote });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// DELETE note
+app.delete('/api/study/notes/:noteId', async (req, res) => {
+    const { noteId } = req.params;
+
+    try {
+        const result = await Note.deleteOne({ _id: noteId });
+        res.json({ success: true, deletedCount: result.deletedCount });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST import notes
+app.post('/api/study/notes/import', async (req, res) => {
+    const { userId, notes } = req.body;
+    if (!userId || !Array.isArray(notes)) {
+        return res.status(400).json({ error: 'userId and notes array are required' });
+    }
+
+    try {
+        const imported = [];
+        for (const item of notes) {
+            const newNote = new Note({
+                title: (item.title || 'Untitled Note').trim(),
+                content: item.content || '',
+                userId,
+                notebookId: item.notebookId || null,
+                subject: item.subject || 'Other',
+                tags: Array.isArray(item.tags) ? item.tags : [],
+                aliases: Array.isArray(item.aliases) ? item.aliases : [],
+                isPinned: Boolean(item.isPinned)
+            });
+            await newNote.save();
+            imported.push(newNote);
+        }
+        res.status(201).json({ success: true, count: imported.length, notes: imported });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
