@@ -1999,6 +1999,15 @@ app.put('/api/study/flashcard-sets/:setId/reorder-cards', async (req, res) => {
 
 // --- Notebooks API ---
 
+function studyUserMatches(document, userId) {
+    if (!document || !userId) return false;
+    return String(document.userId || document.user) === String(userId);
+}
+
+function studyOwnerQuery(userId) {
+    return { $or: [{ userId: userId }, { user: userId }] };
+}
+
 // GET all notebooks for user (with note count per notebook)
 app.get('/api/study/notebooks', async (req, res) => {
     const { userId } = req.query;
@@ -2011,7 +2020,7 @@ app.get('/api/study/notebooks', async (req, res) => {
         const notebooksWithCounts = await Promise.all(
             notebooks.map(async (nb) => {
                 const noteCount = await Note.countDocuments({
-                    $or: [{ userId }, { user: userId }],
+                    ...studyOwnerQuery(userId),
                     notebookId: nb._id
                 });
                 return { ...nb, noteCount };
@@ -2020,12 +2029,14 @@ app.get('/api/study/notebooks', async (req, res) => {
 
         // Also calculate unfiled notes count
         const unfiledCount = await Note.countDocuments({
-            $or: [{ userId }, { user: userId }],
-            $or: [{ notebookId: null }, { notebookId: { $exists: false } }]
+            $and: [
+                studyOwnerQuery(userId),
+                { $or: [{ notebookId: null }, { notebookId: { $exists: false } }] }
+            ]
         });
 
         const totalNotesCount = await Note.countDocuments({
-            $or: [{ userId }, { user: userId }]
+            ...studyOwnerQuery(userId)
         });
 
         res.json({
@@ -2064,10 +2075,11 @@ app.post('/api/study/notebooks', async (req, res) => {
 // PUT update notebook
 app.put('/api/study/notebooks/:notebookId', async (req, res) => {
     const { notebookId } = req.params;
-    const { name, description, color, order } = req.body;
+    const { name, description, color, order, userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
 
     try {
-        const notebook = await Notebook.findById(notebookId);
+        const notebook = await Notebook.findOne({ _id: notebookId, userId });
         if (!notebook) return res.status(404).json({ error: 'Notebook not found' });
 
         if (name !== undefined) notebook.name = name.trim();
@@ -2085,11 +2097,13 @@ app.put('/api/study/notebooks/:notebookId', async (req, res) => {
 // DELETE notebook
 app.delete('/api/study/notebooks/:notebookId', async (req, res) => {
     const { notebookId } = req.params;
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
 
     try {
-        const result = await Notebook.deleteOne({ _id: notebookId });
+        const result = await Notebook.deleteOne({ _id: notebookId, userId });
         // Move all notes in this notebook to unfiled (notebookId: null)
-        await Note.updateMany({ notebookId }, { $set: { notebookId: null } });
+        await Note.updateMany({ $and: [studyOwnerQuery(userId), { notebookId }] }, { $set: { notebookId: null } });
         res.json({ success: true, deletedCount: result.deletedCount });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -2155,8 +2169,10 @@ app.get('/api/study/notes', async (req, res) => {
 // GET single note
 app.get('/api/study/notes/:noteId', async (req, res) => {
     const { noteId } = req.params;
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
     try {
-        const note = await Note.findById(noteId).populate('notebookId', 'name color');
+        const note = await Note.findOne({ _id: noteId, ...studyOwnerQuery(userId) }).populate('notebookId', 'name color');
         if (!note) return res.status(404).json({ error: 'Note not found' });
         res.json({ note });
     } catch (e) {
@@ -2192,10 +2208,11 @@ app.post('/api/study/notes', async (req, res) => {
 // PUT update note
 app.put('/api/study/notes/:noteId', async (req, res) => {
     const { noteId } = req.params;
-    const { title, content, notebookId, subject, tags, aliases, isPinned, order } = req.body;
+    const { title, content, notebookId, subject, tags, aliases, isPinned, order, userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
 
     try {
-        const note = await Note.findById(noteId);
+        const note = await Note.findOne({ _id: noteId, ...studyOwnerQuery(userId) });
         if (!note) return res.status(404).json({ error: 'Note not found' });
 
         if (title !== undefined) note.title = title.trim() || 'Untitled Note';
@@ -2218,9 +2235,11 @@ app.put('/api/study/notes/:noteId', async (req, res) => {
 // DELETE note
 app.delete('/api/study/notes/:noteId', async (req, res) => {
     const { noteId } = req.params;
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
 
     try {
-        const result = await Note.deleteOne({ _id: noteId });
+        const result = await Note.deleteOne({ _id: noteId, ...studyOwnerQuery(userId) });
         res.json({ success: true, deletedCount: result.deletedCount });
     } catch (e) {
         res.status(500).json({ error: e.message });
