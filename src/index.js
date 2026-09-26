@@ -36,6 +36,8 @@ const ClockDevice = require('./models/clockDevice');
 
 // Timeline Model
 const Timeline = require('../src/models/timeline');
+const studyGroupsRouter = require('../src/routes/studyGroups');
+const { createStudyToken, requireStudyAuth } = require('../src/middleware/studyAuth');
 
 const EtymologyWord = require('../src/models/etymologyWord');
 
@@ -691,12 +693,19 @@ app.post("/api/study/register", async (req, res) => {
             password: hashedPassword,
             securityQuestion,
             securityAnswer: hashedSecurityAnswer,
-            settings: { darkMode: false }
+            settings: {
+                darkMode: false,
+                shareLiveStatus: true,
+                shareLeaderboard: false,
+                shareHistory: false,
+                shareSubject: false
+            }
         });
 
         await newUser.save();
         res.status(201).json({
             message: "User registered successfully!",
+            token: createStudyToken(newUser.id),
             user: {
                 id: newUser.id,
                 username: newUser.username,
@@ -738,6 +747,10 @@ app.post("/api/study/login", async (req, res) => {
         }
 
         if (typeof user.pendingDrops === 'undefined') { user.pendingDrops = []; needsSave = true; }
+        if (typeof user.settings?.shareLiveStatus !== 'boolean') {
+            user.settings.shareLiveStatus = true;
+            needsSave = true;
+        }
 
         if (needsSave) {
             await user.save();
@@ -745,6 +758,7 @@ app.post("/api/study/login", async (req, res) => {
 
         res.status(200).json({
             message: "Login successful!",
+            token: createStudyToken(user.id),
             user: {
                 id: user.id,
                 username: user.username,
@@ -850,6 +864,21 @@ app.put('/api/study/settings/darkmode', async (req, res) => {
         res.status(200).json({ message: 'Settings updated successfully!', settings: user.settings });
     } catch (e) {
         res.status(500).json({ error: "Server error: " + e.message });
+    }
+});
+
+app.put('/api/study/settings/privacy', requireStudyAuth, async (req, res) => {
+    const { shareLiveStatus, shareLeaderboard, shareHistory, shareSubject } = req.body;
+    try {
+        const user = await StudyUser.findById(req.studyUserId);
+        if (!user) return res.status(404).json({ error: 'User not found.' });
+        for (const [key, value] of Object.entries({ shareLiveStatus, shareLeaderboard, shareHistory, shareSubject })) {
+            if (typeof value === 'boolean') user.settings[key] = value;
+        }
+        await user.save();
+        res.json({ settings: user.settings });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
     }
 });
 
@@ -2015,7 +2044,7 @@ app.get('/api/study/notebooks', async (req, res) => {
 
     try {
         const notebooks = await Notebook.find({ userId }).sort({ order: 1, createdAt: 1 }).lean();
-        
+
         // Count notes in each notebook
         const notebooksWithCounts = await Promise.all(
             notebooks.map(async (nb) => {
@@ -3224,6 +3253,8 @@ app.delete('/api/history/entity/:slug', async (req, res) => {
 // =======================================================
 // TAROT API SECTION (/api/tarot)
 // =======================================================
+app.use('/api/study/groups', studyGroupsRouter);
+
 app.use('/api/tarot', tarotRoutes);
 
 // =======================================================

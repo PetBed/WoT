@@ -40,6 +40,22 @@ const studyUserSchema = new mongoose.Schema({
         darkMode: {
             type: Boolean,
             default: false
+        },
+        shareLiveStatus: {
+            type: Boolean,
+            default: true
+        },
+        shareLeaderboard: {
+            type: Boolean,
+            default: false
+        },
+        shareHistory: {
+            type: Boolean,
+            default: false
+        },
+        shareSubject: {
+            type: Boolean,
+            default: false
         }
     },
     soundLibrary: [{
