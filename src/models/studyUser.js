@@ -154,6 +154,16 @@ const studyUserSchema = new mongoose.Schema({
         subject: { type: String, required: true },
         mode: { type: String, enum: ['pomodoro', 'stopwatch'], default: 'pomodoro' },
         semesterId: { type: String, default: '' },
+        creditedAwayInterval: {
+            startAt: { type: Date, default: null },
+            endAt: { type: Date, default: null },
+            seconds: { type: Number, default: 0 }
+        },
+        excludedAwayInterval: {
+            startAt: { type: Date, default: null },
+            endAt: { type: Date, default: null },
+            seconds: { type: Number, default: 0 }
+        },
         linkedItem: {
             itemType: { type: String, default: 'none' },
             itemId: { type: String, default: '' },
@@ -163,7 +173,11 @@ const studyUserSchema = new mongoose.Schema({
             displayText: { type: String, default: '' }
         },
         createdAt: { type: Date, default: Date.now }
-    }]
+    }],
+    finalizedRecoverySessionIds: {
+        type: [String],
+        default: []
+    }
 });
 
 module.exports = mongoose.model('StudyUser', studyUserSchema);

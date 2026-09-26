@@ -11,7 +11,13 @@ const studyGroupActivitySchema = new mongoose.Schema({
     stoppedAt: { type: Date, default: null },
     durationSeconds: { type: Number, default: 0, min: 0 },
     status: { type: String, enum: ['active', 'stopped', 'expired'], default: 'active', index: true },
-    expiresAt: { type: Date, required: true, index: true }
+    expiresAt: { type: Date, required: true, index: true },
+    recoveryAdjustments: [{
+        sessionId: { type: String, required: true },
+        requestedEndAt: { type: Date, required: true },
+        previousEndAt: { type: Date, required: true },
+        targetEndAt: { type: Date, required: true }
+    }]
 }, { timestamps: true });
 
 module.exports = mongoose.model('StudyGroupActivity', studyGroupActivitySchema);

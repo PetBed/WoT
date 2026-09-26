@@ -48,6 +48,32 @@ async function addActivityDurationToDailyAggregates(activity, endAt) {
     return portions.reduce((total, portion) => total + portion.seconds, 0);
 }
 
+async function applyRecoveryAggregateDelta(groupId, userId, studyDay, secondsDelta, recoveryId) {
+    const key = { groupId, userId, studyDay };
+    for (let attempt = 0; attempt < 3; attempt++) {
+        const aggregate = await DailyAggregate.findOne(key).lean();
+        if (aggregate) {
+            const result = await DailyAggregate.updateOne(
+                { ...key, recoveryCreditIds: { $ne: recoveryId } },
+                [{
+                    $set: {
+                        seconds: { $max: [0, { $add: [{ $ifNull: ['$seconds', 0] }, secondsDelta] }] },
+                        recoveryCreditIds: { $setUnion: [{ $ifNull: ['$recoveryCreditIds', []] }, [recoveryId]] }
+                    }
+                }]
+            );
+            return result.modifiedCount > 0;
+        }
+        try {
+            await DailyAggregate.create({ ...key, seconds: Math.max(0, secondsDelta), recoveryCreditIds: [recoveryId] });
+            return true;
+        } catch (error) {
+            if (error.code !== 11000) throw error;
+        }
+    }
+    throw new Error('Unable to apply the shared recovery adjustment.');
+}
+
 async function finalizeExpiredActivities(groupId) {
     const now = new Date();
     let activity = await Activity.findOne({ groupId, status: 'active', expiresAt: { $lte: now } }).lean();
@@ -246,6 +272,76 @@ router.post('/:groupId/activity/start', requireMember, async (req, res) => {
         res.status(201).json({ activityId: activity.clientActivityId, startedAt: activity.startedAt, status: activity.status });
     } catch (error) {
         if (error.code === 11000) return res.status(409).json({ error: 'That activity has already been submitted.' });
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.post('/activity/recovery-credit', async (req, res) => {
+    const clientActivityId = String(req.body.clientActivityId || '').trim();
+    const sessionId = String(req.body.sessionId || '').trim();
+    const targetEndAt = new Date(req.body.targetEndAt);
+    if (!clientActivityId || clientActivityId.length > 120 || !sessionId || sessionId.length > 120 || !Number.isFinite(targetEndAt.getTime())) {
+        return res.status(400).json({ error: 'A shared activity, session ID, and valid recovery endpoint are required.' });
+    }
+    try {
+        let activity = await Activity.findOne({ clientActivityId, userId: req.studyUserId });
+        if (!activity) return res.status(404).json({ error: 'Shared activity was not found.' });
+        let membership = await getMembership(activity.groupId, req.studyUserId);
+        let adjustment = activity.recoveryAdjustments.find(item => item.sessionId === sessionId);
+        if ((!membership && !adjustment) || (membership && !adjustment && membership.privacy?.shareLiveStatus === false)) return res.status(403).json({ error: 'Shared study time is no longer enabled for this group.' });
+
+        if (activity.status === 'active' && activity.expiresAt <= new Date()) {
+            await finalizeExpiredActivities(activity.groupId);
+            activity = await Activity.findOne({ clientActivityId, userId: req.studyUserId });
+        }
+
+        adjustment = activity.recoveryAdjustments.find(item => item.sessionId === sessionId);
+        if (!adjustment) {
+            const now = new Date();
+            if (targetEndAt > new Date(now.getTime() + 60000)) {
+                return res.status(400).json({ error: 'The recovery endpoint is outside the shared activity.' });
+            }
+            const cappedEndAt = new Date(Math.min(
+                Math.max(targetEndAt.getTime(), activity.startedAt.getTime()),
+                now.getTime(),
+                activity.startedAt.getTime() + (24 * 60 * 60 * 1000)
+            ));
+            const previousEndAt = activity.status === 'active'
+                ? activity.startedAt
+                : new Date(Math.min((activity.stoppedAt || activity.expiresAt).getTime(), activity.startedAt.getTime() + (24 * 60 * 60 * 1000)));
+            const durationSeconds = Math.max(0, Math.floor((cappedEndAt.getTime() - activity.startedAt.getTime()) / 1000));
+            const updated = await Activity.findOneAndUpdate(
+                { _id: activity._id, 'recoveryAdjustments.sessionId': { $ne: sessionId } },
+                {
+                    $push: { recoveryAdjustments: { sessionId, requestedEndAt: targetEndAt, previousEndAt, targetEndAt: cappedEndAt } },
+                    $set: { status: 'stopped', stoppedAt: now, expiresAt: now, durationSeconds }
+                },
+                { new: true }
+            );
+            if (updated) {
+                activity = updated;
+                adjustment = activity.recoveryAdjustments.find(item => item.sessionId === sessionId);
+            }
+            else {
+                activity = await Activity.findById(activity._id);
+                adjustment = activity?.recoveryAdjustments.find(item => item.sessionId === sessionId);
+            }
+        }
+        if (!adjustment) return res.status(409).json({ error: 'The shared activity changed before recovery could be applied.' });
+        if (Math.abs(new Date(adjustment.requestedEndAt).getTime() - targetEndAt.getTime()) > 1000) {
+            return res.status(409).json({ error: 'A different recovery choice was already applied to this shared session.' });
+        }
+
+        const previousPortions = splitDurationByStudyDay(activity.startedAt, adjustment.previousEndAt);
+        const targetPortions = splitDurationByStudyDay(activity.startedAt, adjustment.targetEndAt);
+        const deltaByDay = new Map();
+        previousPortions.forEach(portion => deltaByDay.set(portion.studyDay, (deltaByDay.get(portion.studyDay) || 0) - portion.seconds));
+        targetPortions.forEach(portion => deltaByDay.set(portion.studyDay, (deltaByDay.get(portion.studyDay) || 0) + portion.seconds));
+        for (const [studyDay, secondsDelta] of deltaByDay) {
+            if (secondsDelta !== 0) await applyRecoveryAggregateDelta(activity.groupId, activity.userId, studyDay, secondsDelta, sessionId);
+        }
+        res.json({ targetEndAt: adjustment.targetEndAt, alreadyApplied: Boolean(activity.recoveryAdjustments.find(item => item.sessionId === sessionId)) });
+    } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });

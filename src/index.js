@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { Resolver } = require('dns');
 const resolver = new Resolver();
 
@@ -59,7 +60,7 @@ const createSlug = (str) => str.toLowerCase().trim().replace(/[^\w\s-]/g, '').re
 const app = express();
 mongoose.set('strictQuery', false);
 
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // CORRECTED CORS MIDDLEWARE
@@ -2307,6 +2308,267 @@ app.post('/api/study/notes/import', async (req, res) => {
 // ==========================================
 // ADMIN - COLLECTIBLES API
 // ==========================================
+
+const ADMIN_SESSION_TTL_SECONDS = 60 * 60 * 8;
+const ADMIN_REDACTED_KEYS = /password|secret|token|security.?answer|answerHash|api.?key/i;
+
+function adminSessionToken() {
+    const payload = Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + ADMIN_SESSION_TTL_SECONDS })).toString('base64url');
+    const signature = crypto.createHmac('sha256', process.env.ADMIN_PASSWORD).update(payload).digest('base64url');
+    return `${payload}.${signature}`;
+}
+
+function requireAdminAuth(req, res, next) {
+    if (!process.env.ADMIN_PASSWORD) {
+        return res.status(503).json({ error: 'Admin access is not configured. Set ADMIN_PASSWORD on the server.' });
+    }
+
+    const token = (req.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+    const [payload, signature] = token.split('.');
+    if (!payload || !signature) return res.status(401).json({ error: 'Admin session required.' });
+
+    const expected = crypto.createHmac('sha256', process.env.ADMIN_PASSWORD).update(payload).digest('base64url');
+    const providedBuffer = Buffer.from(signature);
+    const expectedBuffer = Buffer.from(expected);
+    if (providedBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(providedBuffer, expectedBuffer)) {
+        return res.status(401).json({ error: 'Admin session is invalid or expired.' });
+    }
+
+    try {
+        const session = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+        if (!session.exp || session.exp <= Math.floor(Date.now() / 1000)) {
+            return res.status(401).json({ error: 'Admin session is invalid or expired.' });
+        }
+    } catch (error) {
+        return res.status(401).json({ error: 'Admin session is invalid or expired.' });
+    }
+    next();
+}
+
+function redactAdminDocument(value) {
+    if (Array.isArray(value)) return value.map(redactAdminDocument);
+    if (value instanceof Map) return Object.fromEntries([...value.entries()].map(([key, item]) => [key, redactAdminDocument(item)]));
+    if (!value || typeof value !== 'object' || value instanceof Date || value instanceof mongoose.Types.ObjectId) return value;
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, ADMIN_REDACTED_KEYS.test(key) ? '[REDACTED]' : redactAdminDocument(item)]));
+}
+
+app.post('/api/admin/session', (req, res) => {
+    const configuredPassword = process.env.ADMIN_PASSWORD;
+    if (!configuredPassword) return res.status(503).json({ error: 'Admin access is not configured. Set ADMIN_PASSWORD on the server.' });
+    const suppliedPassword = typeof req.body?.password === 'string' ? req.body.password : '';
+    const suppliedBuffer = Buffer.from(suppliedPassword);
+    const configuredBuffer = Buffer.from(configuredPassword);
+    if (suppliedBuffer.length !== configuredBuffer.length || !crypto.timingSafeEqual(suppliedBuffer, configuredBuffer)) {
+        return res.status(401).json({ error: 'Incorrect admin password.' });
+    }
+    res.json({ token: adminSessionToken(), expiresIn: ADMIN_SESSION_TTL_SECONDS });
+});
+
+app.get('/api/admin/session', requireAdminAuth, (req, res) => res.json({ authenticated: true }));
+app.use('/api/admin', requireAdminAuth);
+
+const STRUCTURED_ADMIN_MODELS = new Set([
+    'StudyUser',
+    'StudyGroup',
+    'StudyGroupActivity',
+    'StudyGroupMembership',
+    'StudyDailyAggregate'
+]);
+
+function adminSchemaTypeName(schemaType) {
+    const instance = schemaType?.instance || '';
+    if (instance === 'ObjectID') return 'ObjectId';
+    if (instance === 'Mixed' || instance === 'Object') return 'json';
+    if (['String', 'Number', 'Boolean', 'Date', 'ObjectId'].includes(instance)) return instance;
+    return 'json';
+}
+
+function describeAdminSchemaType(schemaType, path) {
+    const instance = schemaType?.instance || '';
+    const options = schemaType?.options || {};
+    const sensitive = ADMIN_REDACTED_KEYS.test(path);
+    const descriptor = {
+        name: path.split('.').pop(),
+        type: adminSchemaTypeName(schemaType),
+        required: Boolean(schemaType?.isRequired),
+        editable: !sensitive,
+        sensitive
+    };
+
+    const reference = options.ref || schemaType?.caster?.options?.ref || schemaType?.$embeddedSchemaType?.options?.ref;
+    if (reference) descriptor.ref = reference;
+    if (Array.isArray(schemaType?.enumValues) && schemaType.enumValues.length) descriptor.enum = schemaType.enumValues;
+    for (const key of ['min', 'max', 'minlength', 'maxlength']) {
+        if (typeof options[key] === 'number') descriptor[key] = options[key];
+    }
+    if (options.default === null) descriptor.nullable = true;
+    if (options.default === null || ['string', 'number', 'boolean'].includes(typeof options.default) || Array.isArray(options.default)) {
+        descriptor.default = options.default;
+    }
+
+    if (path === 'pendingDrops') return { ...descriptor, type: 'json' };
+
+    const embeddedSchema = schemaType?.schema || schemaType?.caster?.schema || schemaType?.$embeddedSchemaType?.schema;
+    if (instance === 'Array') {
+        const itemType = schemaType?.$embeddedSchemaType || schemaType?.caster;
+        descriptor.type = 'array';
+        descriptor.items = embeddedSchema
+            ? { type: 'object', children: describeAdminSchema(embeddedSchema) }
+            : describeAdminSchemaType(itemType, `${path}[]`);
+    } else if (instance === 'Map') {
+        descriptor.type = 'map';
+        descriptor.items = describeAdminSchemaType(schemaType?.$__schemaType || schemaType?.ofType, `${path}[]`);
+    } else if (instance === 'SingleNested' && embeddedSchema) {
+        descriptor.type = 'object';
+        descriptor.children = describeAdminSchema(embeddedSchema);
+    }
+
+    return descriptor;
+}
+
+function describeAdminSchema(schema) {
+    const fields = [];
+    const insertField = (siblings, descriptor, pathParts, fullPath) => {
+        const [part, ...remaining] = pathParts;
+        let field = siblings.find((candidate) => candidate.name === part);
+        if (!field) {
+            field = remaining.length
+                ? { name: part, type: 'object', required: false, editable: true, children: [] }
+                : { ...descriptor, name: part, path: fullPath };
+            siblings.push(field);
+        }
+        if (remaining.length) {
+            if (!Array.isArray(field.children)) {
+                field.type = 'object';
+                field.children = [];
+                delete field.path;
+            }
+            return insertField(field.children, descriptor, remaining, fullPath);
+        }
+        return field;
+    };
+
+    schema.eachPath((path, schemaType) => {
+        if (path === '__v' || path === '_id') return;
+        if (path.endsWith('.$*')) {
+            const mapPath = path.slice(0, -3);
+            const mapField = insertField(fields, {
+                name: mapPath.split('.').pop(),
+                path: mapPath,
+                type: 'map',
+                required: false,
+                editable: true
+            }, mapPath.split('.'), mapPath);
+            const itemDescriptor = describeAdminSchemaType(schemaType, `${mapPath}[]`);
+            delete itemDescriptor.name;
+            delete itemDescriptor.path;
+            mapField.type = 'map';
+            mapField.items = itemDescriptor;
+            delete mapField.children;
+            return;
+        }
+        const descriptor = describeAdminSchemaType(schemaType, path);
+        insertField(fields, descriptor, path.split('.'), path);
+    });
+    return fields;
+}
+
+app.get('/api/admin/data/structured-models', (req, res) => {
+    const models = [...STRUCTURED_ADMIN_MODELS].map((name) => {
+        const Model = mongoose.models[name];
+        return Model ? { name, fields: describeAdminSchema(Model.schema) } : null;
+    }).filter(Boolean);
+    res.json(models);
+});
+
+app.get('/api/admin/data/collections', async (req, res) => {
+    try {
+        const collections = await Promise.all(Object.values(mongoose.models).map(async (Model) => ({
+            name: Model.modelName,
+            collection: Model.collection.collectionName,
+            count: await Model.countDocuments()
+        })));
+        res.json(collections.sort((a, b) => a.name.localeCompare(b.name)));
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/admin/data/:model', async (req, res) => {
+    const Model = mongoose.models[req.params.model];
+    if (!Model) return res.status(404).json({ error: 'Unknown model.' });
+
+    const requestedPage = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 25));
+    const search = typeof req.query.search === 'string' ? req.query.search.trim().slice(0, 100) : '';
+    const filter = {};
+    if (search) {
+        const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(escapedSearch, 'i');
+        const stringPaths = Object.values(Model.schema.paths)
+            .filter((schemaPath) => schemaPath.instance === 'String' && !ADMIN_REDACTED_KEYS.test(schemaPath.path))
+            .map((schemaPath) => ({ [schemaPath.path]: regex }));
+        if (mongoose.Types.ObjectId.isValid(search)) filter.$or = [{ _id: search }, ...stringPaths];
+        else if (stringPaths.length) filter.$or = stringPaths;
+        else filter._id = { $exists: false };
+    }
+
+    try {
+        const total = await Model.countDocuments(filter);
+        const pages = Math.max(1, Math.ceil(total / limit));
+        const page = Math.min(requestedPage, pages);
+        const documents = await Model.find(filter).sort({ _id: -1 }).skip((page - 1) * limit).limit(limit);
+        res.json({
+            documents: documents.map((document) => redactAdminDocument(document.toObject({ flattenMaps: true }))),
+            total,
+            page,
+            limit,
+            pages
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/admin/data/:model', async (req, res) => {
+    const Model = mongoose.models[req.params.model];
+    if (!Model) return res.status(404).json({ error: 'Unknown model.' });
+    if (!req.body || Array.isArray(req.body) || typeof req.body !== 'object') return res.status(400).json({ error: 'A JSON object is required.' });
+    try {
+        const document = await new Model(req.body).save();
+        res.status(201).json(redactAdminDocument(document.toObject({ flattenMaps: true })));
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+app.put('/api/admin/data/:model/:id', async (req, res) => {
+    const Model = mongoose.models[req.params.model];
+    if (!Model) return res.status(404).json({ error: 'Unknown model.' });
+    if (!req.body || Array.isArray(req.body) || typeof req.body !== 'object') return res.status(400).json({ error: 'A JSON object is required.' });
+    const updates = { ...req.body };
+    delete updates._id;
+    delete updates.__v;
+    try {
+        const document = await Model.findByIdAndUpdate(req.params.id, { $set: updates }, { new: true, runValidators: true });
+        if (!document) return res.status(404).json({ error: 'Document not found.' });
+        res.json(redactAdminDocument(document.toObject({ flattenMaps: true })));
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+app.delete('/api/admin/data/:model/:id', async (req, res) => {
+    const Model = mongoose.models[req.params.model];
+    if (!Model) return res.status(404).json({ error: 'Unknown model.' });
+    try {
+        const document = await Model.findByIdAndDelete(req.params.id);
+        if (!document) return res.status(404).json({ error: 'Document not found.' });
+        res.json({ deleted: true, id: String(document._id) });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
 
 // --- Base Item Management (e.g., "Pencil", "Eraser") ---
 
